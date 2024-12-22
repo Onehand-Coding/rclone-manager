@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import sys
-import json
 import logging
 import subprocess
 from pathlib import Path
@@ -76,7 +75,7 @@ def get_remote_path(remote_name):
 
     if not folders:
         logging.warning("No folders found on the remote.")
-        if confirm("Do you want to place the backup in the root folder instead? (Y/n)"):
+        if confirm("Do you want to place the backup in the root folder instead?"):
             remote_path = f"{remote_name}:/"
             logging.info(f"Backup will be placed in the root folder: {remote_path}")
             return remote_path
