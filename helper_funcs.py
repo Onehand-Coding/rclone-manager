@@ -4,15 +4,19 @@ import logging
 import subprocess
 
 
-def get_valid_index(item_list):
+def get_valid_index(item_list, allow_root=False):
     """Get valid integer input from user."""
     while True:
         try:
             valid_num = int(input("> "))
+            if allow_root and valid_num == 0:
+                return valid_num
+            if 1 <= valid_num <= len(item_list):
+                return valid_num
+            else:
+                print("Please enter a valid number from the list.")
         except ValueError:
-            print("Please enter an integer")
-        if 1 <= valid_num <= len(item_list):
-            return valid_num
+            print("Please enter an integer.")
 
 
 def get_remote_names():

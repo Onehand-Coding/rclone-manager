@@ -1,63 +1,85 @@
 #!/usr/bin/env python3
 
 import sys
-import json
 import logging
-import argparse
 import subprocess
-from helper_funcs import get_remote_names, choose_remote
+from helper_funcs import choose_remote
 
+# === Configuration ===
+DEFAULT_PORT = 8080
 
-# Configure logging
+REMOTE_CONFIGS = {
+    "mega": {
+        "--vfs-cache-mode": "writes",
+        "--vfs-cache-max-size": "100M",
+        "--vfs-cache-max-age": "1h"
+    },
+    "gdrive": {
+        "--drive-shared-with-me": ""
+    }
+}
+
+# === Logging Configuration ===
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 
-def get_command(remote_name, port=8080):
+def get_command(remote_name, port=DEFAULT_PORT):
     """
-    Generate the appropriate rclone command based on the remote type.
+    Build the rclone command based on the selected remote type.
     """
     remote_type = remote_name.split()[0].lower()
     base_command = ["rclone", "serve", "webdav", f"{remote_name}:", "--addr", f"localhost:{port}"]
 
-    if remote_type == "mega":
-        base_command += [
-            "--vfs-cache-mode", "writes",
-            "--vfs-cache-max-size", "100M",
-            "--vfs-cache-max-age", "1h"
-        ]
-    elif remote_type == "gdrive":
-        base_command.append("--drive-shared-with-me")
-    else:
+    remote_settings = REMOTE_CONFIGS.get(remote_type)
+    if not remote_settings:
         raise ValueError(f"Unsupported remote type: {remote_type}")
+
+    for key, value in remote_settings.items():
+        base_command.append(key)
+        if value:
+            base_command.append(value)
 
     return base_command
 
 
 def run(command):
     """
-    Run the command and handle errors.
+    Execute the rclone command with error handling.
     """
     try:
-        logging.debug(f"Executing command: {' '.join(command)}")
+        logging.info(f"Running command: {' '.join(command)}")
         subprocess.run(command, check=True)
         logging.info("Command executed successfully.")
     except subprocess.CalledProcessError as e:
-        logging.error(f"Command failed with return code {e.returncode}")
+        logging.error(f"Command failed with return code {e.returncode}. Check your configuration.")
+        sys.exit(1)
+    except FileNotFoundError:
+        logging.error("rclone is not installed or not found in your system PATH.")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logging.warning("Operation canceled by the user.")
         sys.exit(1)
     except Exception as e:
-        logging.error(f"An unexpected error occurred: {e}")
+        logging.error(f"Unexpected error: {e}")
         sys.exit(1)
 
 
 def main():
+    """
+    Main function to select remote and execute the rclone command.
+    """
     try:
-        command = get_command(choose_remote())
+        remote_name = choose_remote()
+        command = get_command(remote_name)
         run(command)
     except ValueError as ve:
         logging.error(ve)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        logging.warning("Operation canceled by the user.")
         sys.exit(1)
 
 
