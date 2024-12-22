@@ -22,13 +22,13 @@ def contains_subfolder(parent_folder):
     return  any(file.is_dir() for file in parent_folder.iterdir())
 
 
-def confirm(question, /, *, choice="(Y/n)", confirm_letter='y'):
+def confirm(question, /, *, choices="(Y/n)", confirm_letter='y'):
     """Prompt user for confirmation."""
-    return input(f"{question} {choice} ").lower().strip().startswith(confirm_letter)
+    return input(f"{question} {choices} ").lower().strip().startswith(confirm_letter)
 
 
 def choose_folder(parent_folder):
-   """Choose a folder inside a folder."""
+   """Choose folder inside a folder."""
    folders = [file for file in parent_folder.iterdir() if file.is_dir() and not file.name.startswith(".")]
    for index, folder in enumerate(folders, start=1):
        print(f"{index}. {folder.name}")
