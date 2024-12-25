@@ -4,6 +4,14 @@ import logging
 import subprocess
 
 
+def confirm(prompt):
+    """Prompt user for confirmation."""
+    choice = ""
+    while choice not in ["y", "n"]:
+        choice = input(f"{prompt} (Y/n): ").lower()
+    return choice == "y"
+
+
 def get_valid_index(item_list, allow_root=False):
     """Get valid integer input from user."""
     while True:
@@ -20,11 +28,15 @@ def get_valid_index(item_list, allow_root=False):
 
 
 def get_remote_names():
-    # Get remote names from rclone config file as json.
-    result = subprocess.run(["rclone", "config", "dump"], capture_output=True, text=True)
-    
+    """Get remote names from rclone config file as json."""
+    result = subprocess.run(
+        ["rclone", "config", "dump"], capture_output=True, text=True
+    )
+
     if result.returncode != 0:
-        logging.error("Failed to get rclone config. Ensure rclone is installed and configured.")
+        logging.error(
+            "Failed to get rclone config. Ensure rclone is installed and configured."
+        )
         sys.exit(1)
 
     try:
@@ -37,10 +49,8 @@ def get_remote_names():
     return list(config.keys())
 
 
-def choose_remote():
-    # Ask to choose from the configured remotes.
-    print("Choose a remote:")
-    remote_names = get_remote_names()
+def choose_remote(remote_names):
+    print("Remotes:")
     for index, remote in enumerate(remote_names, start=1):
         print(f"{index}. {remote}")
     return remote_names[get_valid_index(remote_names) - 1]

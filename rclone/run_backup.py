@@ -4,39 +4,48 @@ import sys
 import logging
 import subprocess
 from pathlib import Path
-from helper_funcs import get_valid_index, choose_remote
+from helpers import get_valid_index, choose_remote, get_remote_names, confirm
 
 # Configure logging for informative output and errors
 logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
 # Local main folder
 LOCAL_SOURCE = Path("/storage/emulated/0").absolute()
 
 
-def contains_subfolder(parent_folder):
-    """Check if a folder contains subfolder(s)."""
-    return any(file.is_dir() for file in parent_folder.iterdir())
+def is_hidden(file):
+    return file.name.startswith(".") and not file.name in (".", "..")
 
 
-def confirm(question, /, *, choices="(Y/n)", confirm_letter='y'):
-    """Prompt user for confirmation."""
-    return input(f"{question} {choices} ").lower().strip().startswith(confirm_letter)
+def contains_subfolder(folder):
+    """Check if a folder contains subfolder."""
+    return any(file.is_dir() and not is_hidden(file) for file in folder.iterdir())
+
+
+def contains_hidden(folder):
+    """Checks if a folder contains hidden items along with its subfolders."""
+    return any(is_hidden(file) for file in folder.rglob(".*"))
 
 
 def choose_folder(parent_folder):
-    """Choose a folder inside the specified folder."""
-    folders = [file for file in parent_folder.iterdir() if file.is_dir() and not file.name.startswith(".")]
-    if not folders:
+    """Choose a folder inside a specified folder."""
+    subfolders = sorted(
+        [
+            file
+            for file in parent_folder.iterdir()
+            if file.is_dir() and not is_hidden(file)
+        ]
+    )
+    if not subfolders:
         logging.warning(f"No folders found in {parent_folder}.")
         sys.exit(1)
 
-    for index, folder in enumerate(folders, start=1):
+    for index, folder in enumerate(subfolders, start=1):
         print(f"{index}. {folder.name}")
 
-    return folders[get_valid_index(folders) - 1]
+    return subfolders[get_valid_index(subfolders) - 1]
 
 
 def get_local_path():
@@ -44,7 +53,9 @@ def get_local_path():
     logging.info("Selecting a folder to backup...")
     chosen_folder = choose_folder(LOCAL_SOURCE)
 
-    while contains_subfolder(chosen_folder) and confirm(f"'{chosen_folder.name}' contains subfolders. Go deeper?"):
+    while contains_subfolder(chosen_folder) and confirm(
+        f"'{chosen_folder.name}' contains subfolders. Go deeper?"
+    ):
         logging.info(f"Exploring subfolders in '{chosen_folder.name}'...")
         chosen_folder = choose_folder(chosen_folder)
 
@@ -56,27 +67,39 @@ def get_local_path():
     return chosen_folder
 
 
-def get_remote_path(remote_name):
-    """Display remote folders if available, and allow choosing or default to root."""
+def get_remote_folders(remote):
+    """Get remote folders from remote."""
     try:
         logging.info("Fetching remote folders...")
         result = subprocess.run(
-            ["rclone", "lsd", f"{remote_name}:"],
+            ["rclone", "lsd", f"{remote}:"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
     except subprocess.CalledProcessError as e:
         logging.error(f"Failed to list remote folders: {e}")
         sys.exit(1)
 
     # Parse folder list
-    folders = [line.split()[-1] for line in result.stdout.strip().split('\n') if line]
+    remote_folders = sorted(
+        [line.split()[-1] for line in result.stdout.strip().split("\n") if line]
+    )
 
-    if not folders:
-        logging.warning("No folders found on the remote.")
-        if confirm("Do you want to place the backup in the root folder instead?"):
-            remote_path = f"{remote_name}:/"
+    return remote_folders
+
+
+def get_remote_path(remote, remote_folders):
+    """Allow user to choose from remote folders if available, create one if needed or default to root."""
+    if not remote_folders:
+        logging.warning("No folders found.")
+        if confirm("Create a new folder to use?"):
+            folder_name = input("Enter new folder name: ").strip()
+            remote_path = f"{remote}:/{folder_name}"
+            logging.info(f"Backup will be placed in {remote_path}")
+            return remote_path
+        elif confirm("Do you want to place the backup in the root folder instead?"):
+            remote_path = f"{remote}:/"
             logging.info(f"Backup will be placed in the root folder: {remote_path}")
             return remote_path
         else:
@@ -84,35 +107,36 @@ def get_remote_path(remote_name):
             sys.exit(0)
 
     # Display folders
-    print("Available folders on the remote:")
-    for index, folder in enumerate(folders, start=1):
-        print(f"{index}. {folder}")
+    print("Available folders on remote:")
+    print("0. Root folder")
+    for index, folder in enumerate(remote_folders, start=1):
+        print(f" {index}. {folder}")
 
-    print("0. Place backup in the root folder")
+    # Allow root folder selection
+    folder_index = get_valid_index(remote_folders, allow_root=True) - 1
 
-    # Allow root selection
-    selected_index = get_valid_index(folders, allow_root=True) - 1
-
-    if selected_index == -1:
-        remote_path = f"{remote_name}:/"
-        logging.info(f"Backup will be placed in the root folder: {remote_path}")
+    if folder_index == -1:
+        remote_path = f"{remote}:/"
+        logging.info(f"Backup will be placed in root folder: {remote_path}")
     else:
-        remote_folder = folders[selected_index]
-        remote_path = f"{remote_name}:/{remote_folder}"
+        remote_folder = remote_folders[folder_index]
+        remote_path = f"{remote}:/{remote_folder}"
         logging.info(f"Selected remote folder: {remote_path}")
 
     return remote_path
 
 
-def execute_backup(local_path, remote_path):
+def execute_backup(local_path, remote_path, include_hidden=False):
     """Backup a specific folder using rclone."""
-    logging.info(f"Starting backup: '{local_path}' → '{remote_path}'")
+    logging.info(f"Starting backup: ' {local_path}' → '{remote_path}'")
+    command = ["rclone", "copy", str(local_path), remote_path, "--progress"]
+    if not include_hidden:
+        command += ["--exclude",".*"]
     try:
-        subprocess.run(
-            ["rclone", "copy", str(local_path), remote_path, "--progress"],
-            check=True
+        subprocess.run(command, check=True)
+        logging.info(
+            f"Backup completed successfully: '{local_path}' → ' {remote_path}'"
         )
-        logging.info(f"Backup completed successfully: '{local_path}' → '{remote_path}'")
     except subprocess.CalledProcessError as e:
         logging.error(f"Backup failed: {e}")
         sys.exit(1)
@@ -121,14 +145,21 @@ def execute_backup(local_path, remote_path):
 def main():
     try:
         local_path = get_local_path()
-        remote_name = choose_remote()
-        remote_path = get_remote_path(remote_name)
-        execute_backup(local_path, remote_path)
+        if contains_hidden(local_path):
+            include_hidden = confirm("Folder contains hidden items. include them in backup?")
+        print("Choose a remote destination.")
+        remote_names = get_remote_names()
+        remote = choose_remote(remote_names)
+        remote_folders = get_remote_folders(remote)
+        remote_path = get_remote_path(remote, remote_folders)
+        execute_backup(local_path, remote_path, include_hidden)
     except KeyboardInterrupt:
         logging.warning("\nOperation interrupted by user.")
         sys.exit(1)
     except Exception as e:
-        logging.exception(f"Unexpected error: {e}")
+        logging.exception(
+            f"Unexpected error: {e}"
+        )
         sys.exit(1)
 
 
