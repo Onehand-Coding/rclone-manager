@@ -29,24 +29,18 @@ def get_valid_index(item_list, allow_root=False):
 
 def get_remote_names():
     """Get remote names from rclone config file as json."""
-    result = subprocess.run(
-        ["rclone", "config", "dump"], capture_output=True, text=True
-    )
-
-    if result.returncode != 0:
-        logging.error(
-            "Failed to get rclone config. Ensure rclone is installed and configured."
-        )
-        sys.exit(1)
-
     try:
-        # Load the JSON output
+        result = subprocess.run(
+            ["rclone", "config", "dump"], capture_output=True, text=True
+        )
         config = json.loads(result.stdout)
+        return list(config.keys())
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to retrieve rclone remote names. {e}")
+        sys.exit(1)
     except json.JSONDecodeError as e:
         logging.error(f"Failed to parse rclone config JSON: {e}")
         sys.exit(1)
-
-    return list(config.keys())
 
 
 def choose_remote(remote_names):

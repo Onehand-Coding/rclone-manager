@@ -14,8 +14,7 @@ REMOTE_CONFIGS = {
         "--vfs-cache-max-size": "100M",
         "--vfs-cache-max-age": "1h",
     },
-    "gdrive": {"--drive-shared-with-me": ""
-    },
+    "gdrive": {"--drive-shared-with-me": ""},
 }
 
 # === Logging Configuration ===
