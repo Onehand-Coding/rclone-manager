@@ -48,3 +48,15 @@ def choose_remote(remote_names):
     for index, remote in enumerate(remote_names, start=1):
         print(f"{index}. {remote}")
     return remote_names[get_valid_index(remote_names) - 1]
+
+
+def get_remote_type(remote):
+    try:
+        result = subprocess.run(["rclone", "config", "dump"], capture_output=True, check=True)
+        return json.loads(result.stdout)[remote]["type"]
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to get remote type. {e}")
+        sys.exit(1)
+    except json.JSONDecodeError:
+        logging.error(f"Error parsing config json. {e}")
+        sys.exit(1)
