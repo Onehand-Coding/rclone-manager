@@ -1,7 +1,23 @@
 import sys
 import json
+import socket
 import logging
 import subprocess
+from datetime import datetime
+
+
+def find_free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("", 0))
+        return s.getsockname()[1]
+
+
+def is_installed(tool):
+    try:
+        subprocess.run([tool, "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except FileNotFoundError:
+        logging.error(f"{tool} is not installed or not found in your system PATH.")
+        sys.exit(1)
 
 
 def confirm(prompt):
@@ -60,3 +76,8 @@ def get_remote_type(remote):
     except json.JSONDecodeError:
         logging.error(f"Error parsing config json. {e}")
         sys.exit(1)
+
+
+def get_str_datetime(date_format='%B %d, %Y  %I:%M %p'):
+    """Get the current date and time as a formatted string."""
+    return datetime.now().strftime(date_format)
