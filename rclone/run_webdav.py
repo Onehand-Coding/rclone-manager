@@ -6,66 +6,12 @@ import logging
 import subprocess
 from pathlib import Path
 from threading import Thread
+from configs import DEFAULT_PORT
+from manage_webdav_config import load_configuration
 from helpers import get_remote_names, choose_remote, get_remote_type, confirm
 
-# === Configurations ===
-HOME_DIR = Path(__file__).parent
-DEFAULT_PORT = 8080
-CONFIG_FILE =HOME_DIR / "remote-commands-config.json"
-
-
-# === Logging Configuration ===
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
-)
-
-
-def add_configuration():
-    """Configure command/flags for a remote type."""
-    logging.info("Configuring remote type flag/s...\n")
-    try:
-        remote_type= ""
-        while not remote_type:
-            remote_type = input("Enter remote type: ")
-        
-        print("\nProvide the necessary flags and arguments.\n")
-        remote_flags = {}
-        while True:
-            flag = input("Enter flag: ").strip()
-            value = input("Enter value if applicable: ").strip()
-            remote_flags[flag]=value
-            print(f"""New Configuration:
-                {remote_type}: {remote_flags}""")
-            if confirm("Done?"):
-                break
-        
-        if confirm("\nSave Configurations?"):
-            existing_config = load_configuration()
-            existing_config[remote_type] = remote_flags
-            save_configuration(existing_config)
-            logging.info(f"Remote flag/s Configuration for {remote_type} added successfully.")
-    except KeyboardInterrupt:
-        logging.warning(f"Remote flag Configuration aborted.")
-        sys.exit(0)
-    except Exception as e:
-        logging.error(f"Unexpected error occured: {e}")
-
-
-def load_configuration():
-    """Load remote flags configurations."""
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            configs = json.load(f)
-        return configs
-    except json.JSONDecodeError:
-        logging.error("Failed to load remote-flag-Configuration file.")
-        sys.exit(1)
-
-
-def save_configuration(Configuration):
-    """Save command Configuration for each configured remote type."""
-    with open(CONFIG_FILE, "w") as f:
-        json.dump(Configuration, f, indent=4)
+# === Logging Configuration === #
+logger = logging.getLogger(__name__)
 
 
 def add_authentication(command, username, password):
@@ -102,19 +48,19 @@ def get_command(remote, remote_type, shared=False, add_auth=False, port=DEFAULT_
 def run(command):
     """Execute the rclone command with error handling."""
     try:
-        logging.info(f"Running command: {' '.join(command)}")
+        logger.debug(f"Running command: {' '.join(command)}")
         subprocess.run(command, check=True)
     except KeyboardInterrupt:
-        logging.warning("Operation canceled by the user.")
+        logger.warning("Operation canceled by the user.")
         sys.exit(1)
     except subprocess.CalledProcessError as e:
-        logging.error(e)
+        logger.error(e)
         sys.exit(1)
     except FileNotFoundError:
-        logging.error("rclone is not installed or not found in your system PATH.")
+        logger.error("rclone is not installed or not found in your system PATH.")
         sys.exit(1)
     except Exception as e:
-        logging.error(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}")
         sys.exit(1)
 
 
@@ -152,10 +98,10 @@ def main():
             command = get_command(remote, remote_type, add_auth=authenticate)
             run(command)
     except ValueError as ve:
-        logging.error(ve)
+        logger.error(ve)
         sys.exit(1)
     except KeyboardInterrupt:
-        logging.warning("Operation canceled by the user.")
+        logger.warning("Operation cancelled by the user.")
         sys.exit(1)
 
 
