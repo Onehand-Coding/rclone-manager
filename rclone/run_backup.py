@@ -142,9 +142,11 @@ def execute_backup(local_path, remote_path, include_hidden=False):
     """Backup a specific folder using rclone."""
     logging.info(f"Starting backup: '{local_path}' → '{remote_path}'")
     command = ["rclone", "copy", str(local_path), remote_path, "--progress"]
+    # Exlude all hidden files recursively.
     if not include_hidden:
-        command += ["--exclude", ".*"]
+        command += ["--exclude", "/**/.*"]
     try:
+        logging.debug(f"Executing command: {' '.join(command)}")
         subprocess.run(command, check=True)
         logging.info(f"Backup completed successfully: '{local_path}' → '{remote_path}'")
     except subprocess.CalledProcessError as e:
