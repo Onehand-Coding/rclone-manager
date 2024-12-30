@@ -7,51 +7,27 @@ import subprocess
 from pathlib import Path
 from pprint import pprint
 from configs import CONFIG_FILE
-from helpers import confirm, get_valid_index
+from helpers import confirm, get_valid_index, get_rclone_config
 
+# ===configurations=== #
 logger = logging.getLogger(__name__)
-ACTIONS = {
-    "1": "Add New Configuration",
-    "2": "View Existing Configurations",
-    "3": "Delete Configuration",
-    "4": "Back to Main Menu"
-}
+ACTIONS = [
+    {"Add New Configuration": lambda : add_configuration()}, {"View Existing Configurations": lambda : display_configuration()},
+    {"Delete Configuration": lambda : delete_configuration()},
+    {"Back to Main Menu": None},
+]
 
 
-def add_configuration():
-    """Configure command/flags for a remote type and save it to configuration file."""
-    logger.info("Adding remote type configuration...\n")
-    try:
-        remote_type= ""
-        while not remote_type:
-            remote_type = input("Enter remote type: ")
-        
-        print("\nProvide the necessary flags and arguments.\n")
-
-        remote_flags = {}
-        while True:
-            flag = input("Enter flag: ").strip()
-            value = input("Enter value if applicable: ").strip()
-            remote_flags[flag]=value
-            print(f"""New Configuration:
-                {remote_type}: {remote_flags}""")
-            if confirm("Done?"):
-                break
-        
-        if confirm("\nSave Configurations?"):
-            existing_config = load_configuration()
-            existing_config[remote_type] = remote_flags
-            save_configuration(existing_config)
-            logger.info(f"Configuration for {remote_type} added successfully.")
-    except KeyboardInterrupt:
-        logger.warning(f"Remote flag Configuration aborted.")
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Unexpected error occured: {e}")
-
+def get_remote_types():
+    """Get remote typrs based on configured remotes in rclone config file."""
+    remote_types = set()
+    remote_config = get_rclone_config()
+    for remote in remote_config:
+        remote_types.add(remote_config[remote]["type"])
+    return sorted(remote_types)
 
 def load_configuration():
-    """Load remote flags configurations."""
+    """Load remote configurations."""
     try:
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             configs = json.load(f)
@@ -64,10 +40,63 @@ def load_configuration():
         sys.exit(1)
 
 
-def save_configuration(Configuration):
+def save_configuration(configs):
     """Save configuration for each configured remote type."""
     with open(CONFIG_FILE, "w") as f:
-        json.dump(Configuration, f, indent=4)
+        json.dump(configs, f, indent=4)
+
+
+def display_configuration():
+    """Display currently configured remote type."""
+    configs = load_configuration()
+    logging.info("Current remote type flag configurations:")
+    print()
+    pprint(configs)
+
+def add_configuration():
+    """Configure command/flags for a remote type and save it to configuration file."""
+    logger.info("Adding new remote type configuration...\n")
+    try:
+        remote_types = get_remote_types()
+        already_configured_types = sorted(load_configuration())
+        while True:
+            remote_type= ""
+            while True:
+                print("Enter rclone supported remote type.")
+                remote_type = input("> ")
+                #if remote_type not in remote_types:
+                    #print(f"No remote is configured for {remote_type}.")
+                if remote_type in already_configured_types:
+                    if confirm(f"Edit existing configuration for {remote_type}?"):
+                        edit_configuration(remote_type)
+                else:
+                    break
+            
+            print("\nProvide the necessary flags and arguments.\n")
+    
+            remote_flags = {}
+            flag = input("Enter flag: ").strip()
+            value = input("Enter value if applicable: ").strip()
+            remote_flags[flag]=value
+            print(f"""New Configuration:
+                {remote_type}: {remote_flags}""")
+            if confirm("Done?"):
+                break
+        
+            if confirm("\nSave Configuration?"):
+                existing_config = load_configuration()
+                existing_config[remote_type] = remote_flags
+                save_configuration(existing_config)
+                logger.info(f"Configuration for {remote_type} added successfully.")
+    except KeyboardInterrupt:
+        logger.warning(f"Operation cancelled by the user.")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Unexpected error occured: {e}")
+
+
+def edit_configuration(remote_type=None):
+    """Edit existing remote type configuration."""
 
 
 def delete_configuration():
@@ -86,26 +115,19 @@ def delete_configuration():
 def manage_configurations():
     """Menu to manage flag configurations for different remote types."""
     while True:
-        print("\nManage remote flags configuration for remote types \n")
-        for index, action in ACTIONS.items():
-            print(index, action)
+        print("\nManage remote type configurations.\n")
+        for index, action in enumerate(ACTIONS, start=1):
+            print(index, list(action.keys())[0])
 
-        action = get_valid_index(list(ACTIONS))
-        match action:
-            case 1:
-                add_configuration()
-            case 2:
-                configs = load_configuration()
-                logging.info("Current remote type flag configurations:")
-                pprint(configs)
-            case 3:
-                delete_configuration()
-            case 4:
-                break
+        command = list(ACTIONS[get_valid_index(ACTIONS)-1].values())[0]
+        if command is None:
+            break
+        command()
 
 
 if __name__ == "__main__":
     try:
+        print(list(load_configuration()))
         manage_configurations()
     except KeyboardInterrupt:
         print("Operation cancelled.")

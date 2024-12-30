@@ -5,7 +5,7 @@ import logging
 import subprocess
 from pathlib import Path
 from configs import LOCAL_SOURCE
-from helpers import get_valid_index, choose_remote, get_remote_names, confirm
+from helpers import get_valid_index, choose_remote,  confirm
 
 # logging configuration
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def choose_folder(parent_folder):
         logger.warning(f"No folders found in {parent_folder}.")
         sys.exit(1)
     
-    print("\nSelect a folder:\n")
+    print("\nSelect a folder to backup:\n")
     for index, folder in enumerate(subfolders, start=1):
         print(f"{index}. {folder.name}")
 
@@ -158,8 +158,7 @@ def main():
             list_hidden(local_path)
             include_hidden = confirm("Include hidden items in backup?")
         print("\nChoose a remote destination.\n")
-        remote_names = get_remote_names()
-        remote = choose_remote(remote_names)
+        remote = choose_remote()
         remote_folders = get_remote_folders(remote)
         remote_path = get_remote_path(remote, remote_folders)
         execute_backup(local_path, remote_path, include_hidden)

@@ -8,7 +8,7 @@ from pathlib import Path
 from threading import Thread
 from configs import DEFAULT_PORT
 from manage_webdav_config import load_configuration
-from helpers import get_remote_names, choose_remote, get_remote_type, confirm
+from helpers import choose_remote, get_rclone_config, confirm
 
 # === Logging Configuration === #
 logger = logging.getLogger(__name__)
@@ -67,7 +67,8 @@ def run(command):
 def serve_gdrive(remote, authenticate):
     """Serve both personal and shared files for Google Drive using two configured remotes with thesame gdrive account."""
     shared_remote = f"{remote}-shared"
-    if shared_remote not in get_remote_names():
+    remote_names = list(get_rclone_config().keys())
+    if shared_remote not in remote_names:
         raise ValueError(f"No shared-remote configured for '{remote}'.")
     # Serve personal files
     personal_command = get_command(remote, remote_type="drive", shared=False, add_auth=authenticate)
@@ -88,10 +89,10 @@ def serve_gdrive(remote, authenticate):
 def main():
     """Main function to setup remote and execute the rclone webdav commands."""
     try:
-        print("Choose a remote to serve.")
-        remote = choose_remote(get_remote_names())
+        print("\nChoose a remote to serve.\n")
+        remote = choose_remote()
         authenticate = confirm("Add authentication?")
-        remote_type = get_remote_type(remote)
+        remote_type = get_rclone_config()[remote]["type"]
         if remote_type == "drive" and confirm("Serve shared files?"):
                 serve_gdrive(remote, authenticate)
         else:
