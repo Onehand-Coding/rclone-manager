@@ -52,42 +52,29 @@ def get_valid_index(item_list, allow_root=False):
             sys.exit(0)
 
 
-def get_remote_names():
-    """Get remote names from rclone config file as json."""
-    try:
-        result = subprocess.run(
-            ["rclone", "config", "dump"], capture_output=True, text=True
-        )
-        config = json.loads(result.stdout)
-        return list(config.keys())
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to retrieve rclone remote names. {e}")
-        sys.exit(1)
-    except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse rclone config JSON: {e}")
-        sys.exit(1)
-
-
-def choose_remote(remote_names):
-    """Ask user to choose remote."""
-    print("Remotes:")
+def choose_remote():
+    """Lets user to choose a remote."""
+    logger.info("Selecting remote.")
+    print("Available remotes:")
+    remote_names = list(get_rclone_config().keys())
     for index, remote in enumerate(remote_names, start=1):
         print(f"{index}. {remote}")
     return remote_names[get_valid_index(remote_names) - 1]
 
 
-def get_remote_type(remote):
+def get_str_datetime(date_format='%B %d, %Y  %I:%M %p'):
+    """Get the current date and time as string based on the provided format."""
+    return datetime.now().strftime(date_format)
+
+
+def get_rclone_config():
+    """Get the current rclone remotes configuration as JSON."""
     try:
         result = subprocess.run(["rclone", "config", "dump"], capture_output=True, check=True)
-        return json.loads(result.stdout)[remote]["type"]
+        return json.loads(result.stdout)
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to get remote type. {e}")
+        logger.error(f"Failed to get rclone remotes configuration. {e}")
         sys.exit(1)
     except json.JSONDecodeError:
-        logger.error(f"Error parsing rclone config json. {e}")
+        logger.error(f"Failed to  parse rclone config JSON. {e}")
         sys.exit(1)
-
-
-def get_str_datetime(date_format='%B %d, %Y  %I:%M %p'):
-    """Get the current date and time as a formatted string."""
-    return datetime.now().strftime(date_format)
