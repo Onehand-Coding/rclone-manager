@@ -141,7 +141,7 @@ def execute_backup(local_path, remote_path, include_hidden=False):
     command = ["rclone", "copy", str(local_path), remote_path, "--progress"]
     # Exlude all hidden files recursively.
     if not include_hidden:
-        command += ["--exclude", "/**/.*"]
+        command += ["--exclude", "*/.*", "--exclude", ".*/**"]
     try:
         logging.debug(f"Executing command: {' '.join(command)}")
         subprocess.run(command, check=True)
