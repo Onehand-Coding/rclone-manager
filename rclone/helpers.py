@@ -9,12 +9,14 @@ logger = logging.getLogger(__name__)
 
 
 def find_free_port():
+    """Find unused port to use dynamic port."""
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("", 0))
         return s.getsockname()[1]
 
 
 def is_installed(tool):
+    """Check if a program is indtalled in the system."""
     try:
         subprocess.run([tool, "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except FileNotFoundError:

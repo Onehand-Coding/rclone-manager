@@ -1,5 +1,4 @@
 import os
-import dotenv
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -24,6 +23,3 @@ CONFIG_FILE = HOME_DIR / "remote-commands-config.json"
 LOG_FILE = HOME_DIR / "logs.txt"
 DEFAULT_PORT = 8080
 LOCAL_SOURCE = Path("/storage/emulated/0").absolute()
-
-
-print(WEBDAV_PASSWORD)

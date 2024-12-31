@@ -4,7 +4,7 @@ import sys
 import logging
 from logging.handlers import RotatingFileHandler
 from configs import LOG_FILE
-from helpers import get_valid_index
+from helpers import get_valid_index, is_installed
 from run_webdav import main as run_webdav
 from run_backup import main as run_backup
 from manage_webdav_config import manage_configurations
@@ -34,6 +34,7 @@ def configure_logging():
 def main():
     """Run program to execute backups, serve webdav and manage configurations."""
     configure_logging()
+    is_installed("rclone")
     logging.debug("Rclone scipts ready to be executed.")
     
     print("\nWhat do you want to do today master?\n")
