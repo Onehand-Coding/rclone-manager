@@ -6,7 +6,7 @@ import logging
 import subprocess
 from pathlib import Path
 from threading import Thread
-from configs import DEFAULT_PORT
+from configs import WEBDAV_USERNAME, WEBDAV_PASSWORD, DEFAULT_PORT
 from manage_webdav_config import load_configuration
 from helpers import choose_remote, get_rclone_config, confirm
 
@@ -42,7 +42,7 @@ def get_command(remote, remote_type, shared=False, add_auth=False, port=DEFAULT_
         if value:
             base_command.append(value)
 
-    return add_authentication(base_command, username="Admin", password="47153N") if add_auth else base_command
+    return add_authentication(base_command, WEBDAV_USERNAME, WEBDAV_PASSWORD) if add_auth else base_command
 
 
 def run(command):
