@@ -53,13 +53,23 @@ def get_valid_index(item_list, allow_root=False):
 
 
 def choose_remote():
-    """Lets user to choose a remote."""
-    logger.info("Selecting remote.")
-    print("Available remotes:")
-    remote_names = list(get_rclone_config().keys())
-    for index, remote in enumerate(remote_names, start=1):
-        print(f"{index}. {remote}")
-    return remote_names[get_valid_index(remote_names) - 1]
+    """Lets user choose a remote from the available remotes."""
+    try:
+        logger.info("Selecting remote.")
+        print("Available remotes:")
+        remote_names = list(get_rclone_config().keys())
+        if not remote_names:
+            logger.error("No remotes found in rclone config.")
+            sys.exit(1)
+        
+        for index, remote in enumerate(remote_names, start=1):
+            print(f"{index}. {remote}")
+        
+        selected_index = get_valid_index(remote_names)
+        return remote_names[selected_index - 1]
+    except Exception as e:
+        logger.error(f"Error selecting remote: {e}")
+        sys.exit(1)
 
 
 def get_str_datetime(date_format='%B %d, %Y  %I:%M %p'):
