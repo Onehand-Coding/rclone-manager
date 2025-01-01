@@ -25,7 +25,7 @@ def configure_logging():
     file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3)
 
     logging.basicConfig(
-        level=logging.DEBUG, 
+        level=logging.INFO, 
         format=log_format,
         handlers=[file_handler, stream_handler]
     )
