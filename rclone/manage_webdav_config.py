@@ -35,7 +35,7 @@ def save_configuration(configs):
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(configs, f, indent=4)
-        logger.info("Configuration saved successfully.")
+        logger.debug("Configuration saved successfully.")
     except Exception as e:
         logger.error(f"Failed to save configuration: {e}")
         sys.exit(1)
@@ -43,6 +43,7 @@ def save_configuration(configs):
 def display_configuration():
     """Display the currently configured remote types."""
     logger.info("Current remote type flag configurations:")
+    print()
     pprint(load_configuration())
 
 def add_configuration():
@@ -54,16 +55,15 @@ def add_configuration():
 
         while True:
             remote_type = get_remote_type()
-            if remote_type not in remote_types:
-                print(f"No remote is configured for '{remote_type}'.")
-                continue
-            if remote_type in already_configured_types and confirm(f"Edit existing configuration for {remote_type}?"):
+            if remote_type in already_configured_types:
+                if confirm(f"Edit existing configuration for {remote_type}?"):
                     edit_configuration(remote_type)
                     return
+                else:
+                    continue
             else:
-                configuration = get_configuration(remote_type)
                 if confirm("\nSave Configuration?"):
-                    configs = load_configuration()
+                    configs = load_configuration(remote_type)
                     configs[remote_type] = configuration
                     save_configuration(configs)
                     logger.info(f"Configuration for {remote_type} added successfully.")
@@ -101,7 +101,7 @@ def delete_configuration():
 
 def choose_remote_type(configs, task):
     """Let's the user choose a remote type to use for a specific task."""
-    logger.info(f"Choosing remote type to {task}.")
+    logger.info(f"Choosing remote type to {task}...")
     print(f"Choose remote type to {task}:")
     for index, remote_type in enumerate(configs, start=1):
         print(f"{index}. {remote_type}")
@@ -109,11 +109,17 @@ def choose_remote_type(configs, task):
 
 
 def get_remote_type():
-    """Get the name remote type to be configured from the user."""
+    """Get the name of remote type to be configured."""
+    logger.info("Getting remote type...")
     try:
+        remote_types = get_remote_types()
         while True:
-            remote_type = input("Enter rclone supported remote type: ").strip()
+            print("Enter remote type.")
+            remote_type = input("> ").strip()
             if not remote_type:
+                continue
+            if remote_type not in remote_types:
+                print(f"No remote is configured for '{remote_type}' type.")
                 continue
             return remote_type
     except KeyboardInterrupt:
@@ -125,20 +131,24 @@ def get_remote_type():
 
 def get_configuration(remote_type):
     """Get the key value pair of flag configuration from user."""
-    logger.info(f"Getting flags for {remote_type}.")
+    logger.info(f"Getting flags for {remote_type}...")
     configuration = {}
     try:
         while True:
             print("\nProvide the necessary flags and arguments.\n")
-            flag = input("Enter flag: ").strip()
-            value = input("Enter value if applicable: ").strip()
+            print("Enter flag")
+            flag = input("> ").strip()
+            if not flag:
+                continue
+            print("Enter value if applicable")
+            value = input("> ").strip()
             configuration[flag] = value
-            print(f"New Configuration: {remote_type}: {configuration}")
+            print(f"New Configuration: {configuration}")
             if confirm("Done?"):
                 break
         return configuration
     except KeyboardInterrupt:
-        logger.info('Operation cancelled by the user.')
+        logger.warning('Operation cancelled by the user.')
         sys.exit(0)
     except Exception as e:
         logger.error(f"Unexpected error occurred: {e}")
@@ -165,11 +175,4 @@ def manage_configurations():
         action()
 
 if __name__ == "__main__":
-    try:
-        manage_configurations()
-    except KeyboardInterrupt:
-        logger.warning("Operation cancelled by user.")
-        sys.exit(0)
-    except Exception as e:
-        logger.exception(f"Unexpected error: {e}")
-        sys.exit(1)
+    manage_configurations()
