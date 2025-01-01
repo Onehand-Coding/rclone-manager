@@ -69,7 +69,7 @@ def add_configuration():
                     logger.info(f"Configuration for {remote_type} added successfully.")
                     return
     except KeyboardInterrupt:
-        logger.warning("Operation cancelled by the user.")
+        logger.info("Operation cancelled by the user.")
         sys.exit(0)
     except Exception as e:
         logger.error(f"Unexpected error occurred: {e}")
@@ -123,7 +123,7 @@ def get_remote_type():
                 continue
             return remote_type
     except KeyboardInterrupt:
-        logger.warning("Operation cancelled by the user.")
+        logger.info("Operation cancelled by the user.")
         sys.exit(0)
     except Exception as e:
         logger.error(f"Unexpected error occurred: {e}")
@@ -148,7 +148,7 @@ def get_configuration(remote_type):
                 break
         return configuration
     except KeyboardInterrupt:
-        logger.warning('Operation cancelled by the user.')
+        logger.info('Operation cancelled by the user.')
         sys.exit(0)
     except Exception as e:
         logger.error(f"Unexpected error occurred: {e}")
