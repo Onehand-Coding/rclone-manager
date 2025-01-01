@@ -4,12 +4,12 @@
         "--vfs-cache-max-size": "100M",
         "--vfs-cache-max-age": "1h"
     },
-    "drive": {
-        "--drive-shared-with-me": ""
-    },
     "google photos": {
         "--vfs-cache-mode": "writes",
         "--vfs-cache-max-size": "100M",
         "--vfs-cache-max-age": "1h"
+    },
+    "drive": {
+        "--drive-shared-with-me": ""
     }
 }

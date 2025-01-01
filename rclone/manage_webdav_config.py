@@ -26,6 +26,7 @@ def load_configuration():
         with open(CONFIG_FILE, "r", encoding="utf-8") as f:
             configs = json.load(f)
         return configs
+        logger.debug("Loaded configuration file successfully.")
     except (json.JSONDecodeError, FileNotFoundError) as e:
         logger.error(f"Failed to load configuration file: {e}")
         sys.exit(1)
@@ -48,7 +49,7 @@ def display_configuration():
 
 def add_configuration():
     """Add a new configuration for a remote type."""
-    logger.info("Adding new remote type configuration...\n")
+    logger.info("Adding new remote flag configuration...")
     try:
         remote_types = get_remote_types()
         already_configured_types = sorted(load_configuration())
@@ -62,17 +63,19 @@ def add_configuration():
                 else:
                     continue
             else:
+                configuration = get_configuration(remote_type)
                 if confirm("\nSave Configuration?"):
-                    configs = load_configuration(remote_type)
+                    configs = load_configuration()
                     configs[remote_type] = configuration
                     save_configuration(configs)
-                    logger.info(f"Configuration for {remote_type} added successfully.")
+                    logger.info(f"Configuration for '{remote_type}' added successfully.")
                     return
     except KeyboardInterrupt:
         logger.info("Operation cancelled by the user.")
         sys.exit(0)
     except Exception as e:
         logger.error(f"Unexpected error occurred: {e}")
+        sys.exit(1)
 
 def edit_configuration(remote_type=None):
     """Edit an existing remote type configuration."""
@@ -87,7 +90,7 @@ def edit_configuration(remote_type=None):
             {configs[remote_type]}.""")
     if confirm("\nSave Configuration?"):
         save_configuration(configs)
-        logger.info(f"Saved changes for {remote_type}.")
+        logger.info(f"Configuration for '{remote_type}' edited successfully.")
 
 def delete_configuration():
     """Remove a remote type configuration."""
@@ -96,12 +99,12 @@ def delete_configuration():
     if confirm(f"Delete configuration for {remote_type}?"):
         del configs[remote_type]
         save_configuration(configs)
-        logger.info(f"Configuration for {remote_type} deleted successfully.")
+        logger.info(f"Configuration for '{remote_type}' deleted successfully.")
 
 
 def choose_remote_type(configs, task):
     """Let's the user choose a remote type to use for a specific task."""
-    logger.info(f"Choosing remote type to {task}...")
+    logger.debug(f"Choosing remote type to {task}...")
     print(f"Choose remote type to {task}:")
     for index, remote_type in enumerate(configs, start=1):
         print(f"{index}. {remote_type}")
@@ -109,17 +112,16 @@ def choose_remote_type(configs, task):
 
 
 def get_remote_type():
-    """Get the name of remote type to be configured."""
-    logger.info("Getting remote type...")
+    """Get the name of remote type to be configured. Only accepts rclone supported remote types."""
     try:
         remote_types = get_remote_types()
         while True:
-            print("Enter remote type.")
+            print("\nEnter remote type.")
             remote_type = input("> ").strip()
             if not remote_type:
                 continue
             if remote_type not in remote_types:
-                print(f"No remote is configured for '{remote_type}' type.")
+                print(f"\nNo remote is configured for '{remote_type}' type.")
                 continue
             return remote_type
     except KeyboardInterrupt:
@@ -131,7 +133,7 @@ def get_remote_type():
 
 def get_configuration(remote_type):
     """Get the key value pair of flag configuration from user."""
-    logger.info(f"Getting flags for {remote_type}...")
+    logger.debug(f"Getting flags for {remote_type}...")
     configuration = {}
     try:
         while True:
@@ -143,7 +145,7 @@ def get_configuration(remote_type):
             print("Enter value if applicable")
             value = input("> ").strip()
             configuration[flag] = value
-            print(f"New Configuration: {configuration}")
+            print(f"Configuration: {configuration}")
             if confirm("Done?"):
                 break
         return configuration
