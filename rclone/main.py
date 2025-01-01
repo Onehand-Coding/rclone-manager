@@ -11,9 +11,9 @@ from manage_webdav_config import manage_configurations
 
 
 ACTIONS = [
-    {"Run backups": lambda : run_backup()},
-    {"Serve webdav": lambda : run_webdav()},
-    {"Manage configurations": lambda : manage_configurations()},
+    {"Run backup": lambda : run_backup()},
+    {"Serve webDAV": lambda : run_webdav()},
+    {"Manage webDAV configurations": lambda : manage_configurations()},
     {"Exit": lambda : sys.exit(0)}
 ]
 
