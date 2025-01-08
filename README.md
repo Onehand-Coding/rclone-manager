@@ -1,2 +1,2 @@
-# Scripts for termux automations.
+# Automation scripts to run rclone command
 
