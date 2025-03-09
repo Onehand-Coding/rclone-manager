@@ -9,28 +9,10 @@ import platform
 import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from logging.handlers import RotatingFileHandler
 
-# Constants
-ROOT_DIR = Path(__file__).parent.parent
-CONFIG_FILE = ROOT_DIR / "data" / "config.json"
-LOG_FILE = ROOT_DIR / "logs" /"remotes.log"
-DEFAULT_CONFIG = {
-    "flags": {
-        "drive": {},
-        "mega": {},
-        "http": {},
-        "webdav": {},
-        "ftp": {},
-        "sftp": {}
-    }
-}
+from config import configure_logging, CONFIG_FILE, LOG_FILE, DEFAULT_CONFIG, DEFAULT_PORT, USERNAME, PASSWORD
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3), logging.StreamHandler(sys.stdout)])
+logger = logging.getLogger(__name__)
 
 # Cache for configuration data
 _config_cache: Optional[Dict[str, Any]] = None
@@ -94,7 +76,7 @@ def get_ip_address() -> str:
         else:
             return "127.0.0.1"  # Fallback to localhost
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error fetching IP address: {e}")
+        logger.error(f"Error fetching IP address: {e}")
         return "127.0.0.1"
 
 
@@ -113,13 +95,13 @@ def get_remote_type(remote: str) -> Optional[str]:
         config = json.loads(result.stdout)
         return config.get(remote_name, {}).get("type")
     except subprocess.CalledProcessError as e:
-        logging.error(f"Failed to get rclone remotes configuration: {e}")
+        logger.error(f"Failed to get rclone remotes configuration: {e}")
         return None
     except json.JSONDecodeError as e:
-        logging.error(f"Failed to parse rclone config JSON: {e}")
+        logger.error(f"Failed to parse rclone config JSON: {e}")
         return None
     except Exception as e:
-        logging.error(f"Error in get_remote_type: {e}")
+        logger.error(f"Error in get_remote_type: {e}")
         return None
 
 
@@ -134,7 +116,7 @@ def load_config() -> Dict[str, Any]:
         return _config_cache
 
     if not CONFIG_FILE.exists():
-        logging.info("Config file 'config.json' not found. Creating a default one.")
+        logger.info("Config file 'config.json' not found. Creating a default one.")
         with open(CONFIG_FILE, "w") as f:
             json.dump(DEFAULT_CONFIG, f, indent=4)
         _config_cache = DEFAULT_CONFIG
@@ -156,7 +138,7 @@ def get_flags(remote_type: str, shared: bool = False) -> List[str]:
     """
     config = load_config()
     if "flags" not in config or remote_type not in config["flags"]:
-        logging.warning(f"No flags configured for remote type: {remote_type}")
+        logger.warning(f"No flags configured for remote type: {remote_type}")
         return []
 
     flag_configs = config["flags"][remote_type]
@@ -170,7 +152,7 @@ def get_flags(remote_type: str, shared: bool = False) -> List[str]:
     return flags
 
 
-def serve_remote(remote: str, backend: str, port: int, shared: bool = False, user: str = "admin", passw: str = "admin"):
+def serve_remote(remote: str, backend: str, port: int = DEFAULT_PORT, shared: bool = False, user: str = USERNAME, passw: str = PASSWORD):
     """Starts an rclone serve process in a new thread.
 
     Args:
@@ -183,51 +165,53 @@ def serve_remote(remote: str, backend: str, port: int, shared: bool = False, use
     """
     remote_name = f"{remote.strip(':')}-shared:" if shared else remote
     remote_type = get_remote_type(remote_name)
-    logging.debug(f"Remote type for {remote_name}: {remote_type}")
+    logger.debug(f"Remote type for {remote_name}: {remote_type}")
 
     flags = get_flags(remote_type, shared) if remote_type else []
     command = ["rclone", "serve", backend, remote_name, "--addr", f"{get_ip_address()}:{port}", "--user", user, "--pass", passw]
     command.extend(flags)
 
-    logging.info(f"Starting Rclone serve for: {remote_name} using {backend} on port {port}")
-    logging.debug(f"Running: {' '.join(command)}")
+    logger.info(f"Starting Rclone serve for: {remote_name} using {backend} on port {port}")
+    logger.debug(f"Running: {' '.join(command)}")
 
     try:
         subprocess.run(command, check=True)
     except Exception as e:
-        logging.error(f"Error running rclone serve: {e}")
+        logger.error(f"Error running rclone serve: {e}")
 
 
 def main():
     """Main function to run the script."""
+    configure_logging()
+
     remotes = list_rclone_remotes()
     selected_remote = choose_from_list(remotes, "\nAvailable Rclone remotes:")
     if not selected_remote:
-        logging.error("No remote selected. Exiting.")
+        logger.error("No remote selected. Exiting.")
         sys.exit(1)
 
-    backends = ["http", "webdav", "ftp", "sftp"]
+    backends = ["webdav", "ftp", "sftp", "http"]
     selected_backend = choose_from_list(backends, "\nAvailable backends:")
     if not selected_backend:
-        logging.error("No backend selected. Exiting.")
+        logger.error("No backend selected. Exiting.")
         sys.exit(1)
 
     remote_type = get_remote_type(selected_remote)
     if remote_type == "drive":
-        logging.info("Drive remote detected, starting two instances (normal and shared)...")
-        thread1 = threading.Thread(target=serve_remote, args=(selected_remote, selected_backend, 8080), daemon=True)
-        thread2 = threading.Thread(target=serve_remote, args=(selected_remote, selected_backend, 9090, True), daemon=True)
+        logger.info("Drive remote detected, starting two instances (normal and shared)...")
+        thread1 = threading.Thread(target=serve_remote, args=(selected_remote, selected_backend), daemon=True)
+        thread2 = threading.Thread(target=serve_remote, args=(selected_remote, selected_backend, DEFAULT_PORT + 1, True), daemon=True)
         thread1.start()
         thread2.start()
         thread1.join()
         thread2.join()
     else:
-        serve_remote(selected_remote, selected_backend, 8080)
+        serve_remote(selected_remote, selected_backend)
 
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        logging.info("Bye!")
+        logger.info("Bye!")
         sys.exit()
