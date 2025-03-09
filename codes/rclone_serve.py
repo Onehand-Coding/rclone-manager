@@ -9,10 +9,12 @@ import platform
 import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+from logging.handlers import RotatingFileHandler
 
 # Constants
-HOME_DIR = Path(__file__).parent
-CONFIG_FILE = HOME_DIR / "config.json"
+ROOT_DIR = Path(__file__).parent.parent
+CONFIG_FILE = ROOT_DIR / "data" / "config.json"
+LOG_FILE = ROOT_DIR / "logs" /"remotes.log"
 DEFAULT_CONFIG = {
     "flags": {
         "drive": {},
@@ -25,7 +27,10 @@ DEFAULT_CONFIG = {
 }
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3), logging.StreamHandler(sys.stdout)])
 
 # Cache for configuration data
 _config_cache: Optional[Dict[str, Any]] = None
@@ -40,7 +45,7 @@ def list_rclone_remotes() -> List[str]:
     try:
         output = subprocess.run(["rclone", "listremotes"], capture_output=True, text=True, check=True)
         remotes = [remote.strip() for remote in output.stdout.splitlines() if "shared" not in remote]
-        return remotes
+        return sorted(remotes)
     except subprocess.CalledProcessError as e:
         logging.error(f"Error retrieving Rclone remotes: {e.stderr.strip()}")
         return []
