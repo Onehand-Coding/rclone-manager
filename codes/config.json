@@ -1,0 +1,17 @@
+{
+    "flags":{
+        "mega": {
+            "--vfs-cache-mode": "full",
+            "--vfs-cache-max-size": "100M",
+            "--vfs-cache-max-age": "1h"
+        },
+        "google photos": {
+            "--vfs-cache-mode": "full",
+            "--vfs-cache-max-size": "100M",
+            "--vfs-cache-max-age": "1h"
+        },
+        "drive": {
+            "--drive-shared-with-me": ""
+        }
+    }
+}
