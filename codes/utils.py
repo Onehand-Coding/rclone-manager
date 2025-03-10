@@ -5,9 +5,11 @@ import json
 import logging
 import platform
 import subprocess
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
+
 
 def is_rclone_installed() -> bool:
     """Check if rclone is installed in the system."""
@@ -35,9 +37,11 @@ def get_ip_address() -> str:
         logger.error(f"Error fetching IP address: {e}")
         return "127.0.0.1"
 
+
 def clear_screen() -> None:
     """Clears the terminal screen."""
     os.system('cls' if platform.system() == "Windows" else 'clear')
+
 
 def choose_from_list(items: List[str], prompt: str) -> Optional[str]:
     """Prompts the user to choose an item from a list."""
@@ -64,3 +68,40 @@ def list_rclone_remotes() -> List[str]:
     except subprocess.CalledProcessError as e:
         logger.error(f"Error retrieving Rclone remotes: {e.stderr.strip()}")
         return []
+
+
+def list_local_folders(current_path: Path) -> List[str]:
+    """Lists folders in the current directory."""
+    try:
+        folders = sorted([f for f in os.listdir(current_path) if os.path.isdir(os.path.join(current_path, f))])
+        return folders
+    except PermissionError:
+        logger.error(f"Permission denied: {current_path}")
+        return []
+    except FileNotFoundError:
+        logger.error(f"Directory not found: {current_path}")
+        return []
+
+
+def navigate_local_file_system() -> str:
+    """Allows the user to navigate the file system and select a folder."""
+    current_path = Path.home()  # Start from the user's home directory
+    while True:
+        clear_screen()
+        print("Choose local folder to serve")
+        print(f"\nCurrent Directory: {current_path}")
+        folders = list_local_folders(current_path)
+        print("[0] To select this folder")
+        print("[b] To go Back")
+        for i, folder in enumerate(folders):
+            print(f"[{i + 1}] {folder}")
+        choice = input("\nEnter your choice: ").lower()
+
+        if choice == '0':
+            return str(current_path)
+        elif choice == 'b':
+            current_path = current_path.parent
+        elif choice.isdigit() and 1 <= int(choice) <= len(folders):
+            current_path = current_path / folders[int(choice) - 1]
+        else:
+            print("Invalid choice. Please try again.")

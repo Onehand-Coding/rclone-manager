@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import List, Optional
 
-from utils import clear_screen, choose_from_list, is_rclone_installed, list_rclone_remotes
+from utils import clear_screen, choose_from_list, is_rclone_installed, list_rclone_remotes, list_local_folders
 from config import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -42,17 +42,6 @@ def navigate_remote_file_system(remote: str) -> str:
         else:
             print("Invalid choice. Please try again.")
 
-def list_local_folders(current_path: Path) -> List[str]:
-    """Lists folders in the current local directory."""
-    try:
-        folders = sorted([f for f in os.listdir(current_path) if os.path.isdir(os.path.join(current_path, f))])
-        return folders
-    except PermissionError:
-        print(f"Permission denied: {current_path}")
-        return []
-    except FileNotFoundError:
-        print(f"Directory not found: {current_path}")
-        return []
 
 def navigate_local_file_system() -> str:
     """Allows the user to navigate the local file system and select a destination."""
