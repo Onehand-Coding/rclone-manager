@@ -1,92 +1,55 @@
+import os
+import re
 import sys
 import json
-import socket
 import logging
+import platform
 import subprocess
-from datetime import datetime
+from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-
-def find_free_port():
-    """Find unused port to use dynamic port."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind(("", 0))
-        return s.getsockname()[1]
-
-
-def is_installed(tool):
-    """Check if a program is indtalled in the system."""
+def is_rclone_installed() -> bool:
+    """Check if rclone is installed in the system."""
     try:
-        subprocess.run([tool, "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["rclone", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return True
     except FileNotFoundError:
-        logger.error(f"{tool} is not installed or not found in your system PATH.")
+        logger.error("Rclone is not installed or not found in your system PATH.")
         sys.exit(1)
-
-
-def confirm(prompt):
-    """Prompt user for confirmation."""
-    choice = ""
-    try:
-        while choice not in ["y", "n"]:
-            choice = input(f"{prompt} (Y/n): ").lower()
-        return choice == "y"
-    except KeyboardInterrupt:
-        logger.info("Operation cancelled by user.")
-        sys.exit(0)
-
-
-def get_valid_index(item_list, allow_root=False):
-    """Get valid integer input from user."""
-    while True:
-        try:
-            valid_num = int(input("> "))
-            if allow_root and valid_num == 0:
-                return valid_num
-            if 1 <= valid_num <= len(item_list):
-                return valid_num
-            else:
-                print("Please enter a valid number from the list.")
-        except ValueError:
-            print("Please enter an integer.")
-        except KeyboardInterrupt:
-            logger.info("Operation cancelled by user.")
-            sys.exit(0)
-
-
-def choose_remote():
-    """Lets user choose a remote from the available remotes."""
-    try:
-        logger.info("Selecting remote.")
-        print("Available remotes:")
-        remote_names = list(get_rclone_config().keys())
-        if not remote_names:
-            logger.error("No remotes found in rclone config.")
-            sys.exit(1)
-        
-        for index, remote in enumerate(remote_names, start=1):
-            print(f"{index}. {remote}")
-        
-        selected_index = get_valid_index(remote_names)
-        return remote_names[selected_index - 1]
-    except Exception as e:
-        logger.error(f"Error selecting remote: {e}")
-        sys.exit(1)
-
-
-def get_str_datetime(date_format='%B %d, %Y  %I:%M %p'):
-    """Get the current date and time as string based on the provided format."""
-    return datetime.now().strftime(date_format)
-
-
-def get_rclone_config():
-    """Get the current rclone remotes configuration as JSON."""
-    try:
-        result = subprocess.run(["rclone", "config", "dump"], capture_output=True, check=True)
-        return json.loads(result.stdout)
     except subprocess.CalledProcessError as e:
-        logger.error(f"Failed to get rclone remotes configuration. {e}")
-        sys.exit(1)
-    except json.JSONDecodeError:
-        logger.error(f"Failed to  parse rclone config JSON. {e}")
-        sys.exit(1)
+        logger.error(f"Error checking rclone installation: {e}")
+        return False
+
+def get_ip_address() -> str:
+    """Retrieves the non-loopback IP address of the machine."""
+    try:
+        if platform.system() == "Windows":
+            output = subprocess.run(["ipconfig"], capture_output=True, text=True, check=True).stdout
+            ip_matches = re.findall(r"IPv4 Address[\. ]+: (\d+\.\d+\.\d+\.\d+)", output)
+        else:
+            output = subprocess.run(["ip", "route", "get", "1"], capture_output=True, text=True, check=True).stdout
+            ip_matches = re.findall(r"src (\d+\.\d+\.\d+\.\d+)", output)
+        return ip_matches[0] if ip_matches else "127.0.0.1"
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error fetching IP address: {e}")
+        return "127.0.0.1"
+
+def clear_screen() -> None:
+    """Clears the terminal screen."""
+    os.system('cls' if platform.system() == "Windows" else 'clear')
+
+def choose_from_list(items: List[str], prompt: str) -> Optional[str]:
+    """Prompts the user to choose an item from a list."""
+    if not items:
+        logger.warning("No items available to choose from.")
+        return None
+
+    print(prompt)
+    for i, item in enumerate(items):
+        print(f"[{i + 1}] {item}")
+    while True:
+        choice = input("\nEnter your choice: ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= len(items):
+            return items[int(choice) - 1]
+        print("Invalid choice. Please enter a valid number.")
