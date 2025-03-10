@@ -1,180 +1,172 @@
-#!/usr/bin/env python3
-
-import sys
 import json
-import logging
 from pathlib import Path
-from pprint import pprint
-from configs import CONFIG_FILE
-from helpers import confirm, get_valid_index, get_rclone_config
+from typing import Dict, Any, Optional
 
-# === Logging Configuration === #
-logger = logging.getLogger(__name__)
+from utils import clear_screen, choose_from_list
+from config import CONFIG_FILE, DEFAULT_CONFIG
 
-# Define the actions that the user can take in the menu
-ACTIONS = [
-    {"Add New Configuration": lambda: add_configuration()},
-    {"Edit Existing Configurations": lambda: edit_configuration()},
-    {"View Existing Configurations": lambda: display_configuration()},
-    {"Delete Configuration": lambda: delete_configuration()},
-    {"Back to Main Menu": None},
-]
+def load_config() -> Dict[str, Any]:
+    """Loads the configuration from the config file."""
+    if not CONFIG_FILE.exists():
+        print("Config file not found. Creating a default one.")
+        with open(CONFIG_FILE, "w") as f:
+            json.dump(DEFAULT_CONFIG, f, indent=4)
+        return DEFAULT_CONFIG
+    with open(CONFIG_FILE, "r") as f:
+        return json.load(f)
 
-def load_configuration():
-    """Load remote configurations from the JSON file."""
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            configs = json.load(f)
-        return configs
-        logger.debug("Loaded configuration file successfully.")
-    except (json.JSONDecodeError, FileNotFoundError) as e:
-        logger.error(f"Failed to load configuration file: {e}")
-        sys.exit(1)
+def save_config(config: Dict[str, Any]) -> None:
+    """Saves the configuration to the config file."""
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f, indent=4)
+    print("Configuration saved successfully!")
 
-def save_configuration(configs):
-    """Save the updated configuration back to the JSON file."""
-    try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(configs, f, indent=4)
-        logger.debug("Configuration saved successfully.")
-    except Exception as e:
-        logger.error(f"Failed to save configuration: {e}")
-        sys.exit(1)
+def view_config(config: Dict[str, Any]) -> None:
+    """Displays the current configuration."""
+    clear_screen()
+    print("Current Configuration:")
+    print(json.dumps(config, indent=4))
+    input("\nPress Enter to continue...")
 
-def display_configuration():
-    """Display the currently configured remote types."""
-    logger.info("Current remote type flag configurations:")
-    print()
-    pprint(load_configuration())
+def add_remote_type(config: Dict[str, Any]) -> None:
+    """Adds a new remote type to the configuration."""
+    clear_screen()
+    remote_type = input("Enter the name of the new remote type: ").strip()
+    if not remote_type:
+        print("Invalid remote type name.")
+        return
 
-def add_configuration():
-    """Add a new configuration for a remote type."""
-    logger.info("Adding new remote flag configuration...")
-    try:
-        remote_types = get_remote_types()
-        already_configured_types = sorted(load_configuration())
+    if remote_type in config["flags"]:
+        print(f"Remote type '{remote_type}' already exists.")
+        return
 
-        while True:
-            remote_type = get_remote_type()
-            if remote_type in already_configured_types:
-                if confirm(f"Edit existing configuration for {remote_type}?"):
-                    edit_configuration(remote_type)
-                    return
-                else:
-                    continue
-            else:
-                configuration = get_configuration(remote_type)
-                if confirm("\nSave Configuration?"):
-                    configs = load_configuration()
-                    configs[remote_type] = configuration
-                    save_configuration(configs)
-                    logger.info(f"Configuration for '{remote_type}' added successfully.")
-                    return
-    except KeyboardInterrupt:
-        logger.info("Operation cancelled by the user.")
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Unexpected error occurred: {e}")
-        sys.exit(1)
+    config["flags"][remote_type] = {}
+    print(f"Remote type '{remote_type}' added successfully.")
+    save_config(config)
 
-def edit_configuration(remote_type=None):
-    """Edit an existing remote type configuration."""
-    configs = load_configuration()
-    if remote_type is None:
-        remote_type = choose_remote_type(configs, "edit")
-    print(f"Current configuration for {remote_type}: {configs[remote_type]}")
-    
-    new_configuration = get_configuration(remote_type)
-    configs[remote_type].update(new_configuration)
-    print(f"""New configuration for {remote_type}:
-            {configs[remote_type]}.""")
-    if confirm("\nSave Configuration?"):
-        save_configuration(configs)
-        logger.info(f"Configuration for '{remote_type}' edited successfully.")
+def delete_remote_type(config: Dict[str, Any]) -> None:
+    """Deletes a remote type from the configuration."""
+    clear_screen()
+    remote_types = list(config["flags"].keys())
+    if not remote_types:
+        print("No remote types available to delete.")
+        return
 
-def delete_configuration():
-    """Remove a remote type configuration."""
-    configs = load_configuration()
-    remote_type = choose_remote_type(configs, "delete")
-    if confirm(f"Delete configuration for {remote_type}?"):
-        del configs[remote_type]
-        save_configuration(configs)
-        logger.info(f"Configuration for '{remote_type}' deleted successfully.")
+    remote_type = choose_from_list(remote_types, "Select a remote type to delete:")
+    if not remote_type:
+        return
 
+    del config["flags"][remote_type]
+    print(f"Remote type '{remote_type}' deleted successfully.")
+    save_config(config)
 
-def choose_remote_type(configs, task):
-    """Let's the user choose a remote type to use for a specific task."""
-    logger.debug(f"Choosing remote type to {task}...")
-    print(f"Choose remote type to {task}:")
-    for index, remote_type in enumerate(configs, start=1):
-        print(f"{index}. {remote_type}")
-    return list(configs)[get_valid_index(configs) - 1]
+def add_flag(config: Dict[str, Any]) -> None:
+    """Adds a new flag to a remote type."""
+    clear_screen()
+    remote_types = list(config["flags"].keys())
+    if not remote_types:
+        print("No remote types available to add flags to.")
+        return
 
+    remote_type = choose_from_list(remote_types, "Select a remote type to add a flag:")
+    if not remote_type:
+        return
 
-def get_remote_type():
-    """Get the name of remote type to be configured. Only accepts rclone supported remote types."""
-    try:
-        remote_types = get_remote_types()
-        while True:
-            print("\nEnter remote type.")
-            remote_type = input("> ").strip()
-            if not remote_type:
-                continue
-            if remote_type not in remote_types:
-                print(f"\nNo remote is configured for '{remote_type}' type.")
-                continue
-            return remote_type
-    except KeyboardInterrupt:
-        logger.info("Operation cancelled by the user.")
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Unexpected error occurred: {e}")
+    flag = input("Enter the flag (e.g., '--vfs-cache-mode'): ").strip()
+    value = input("Enter the value for the flag (leave empty if no value): ").strip()
 
+    if not flag:
+        print("Invalid flag.")
+        return
 
-def get_configuration(remote_type):
-    """Get the key value pair of flag configuration from user."""
-    logger.debug(f"Getting flags for {remote_type}...")
-    configuration = {}
-    try:
-        while True:
-            print("\nProvide the necessary flags and arguments.\n")
-            print("Enter flag")
-            flag = input("> ").strip()
-            if not flag:
-                continue
-            print("Enter value if applicable")
-            value = input("> ").strip()
-            configuration[flag] = value
-            print(f"Configuration: {configuration}")
-            if confirm("Done?"):
-                break
-        return configuration
-    except KeyboardInterrupt:
-        logger.info('Operation cancelled by the user.')
-        sys.exit(0)
-    except Exception as e:
-        logger.error(f"Unexpected error occurred: {e}")
+    config["flags"][remote_type][flag] = value
+    print(f"Flag '{flag}' added to remote type '{remote_type}' successfully.")
+    save_config(config)
 
+def edit_flag(config: Dict[str, Any]) -> None:
+    """Edits an existing flag for a remote type."""
+    clear_screen()
+    remote_types = list(config["flags"].keys())
+    if not remote_types:
+        print("No remote types available to edit flags for.")
+        return
 
-def get_remote_types():
-    """Get all remote types available in the rclone configuration."""
-    remote_types = set()
-    rclone_config = get_rclone_config()
-    for remote in rclone_config:
-        remote_types.add(rclone_config[remote]["type"])
-    return sorted(remote_types)
+    remote_type = choose_from_list(remote_types, "Select a remote type to edit a flag:")
+    if not remote_type:
+        return
 
-def manage_configurations():
-    """Main menu for managing flag configurations."""
+    flags = list(config["flags"][remote_type].keys())
+    if not flags:
+        print(f"No flags available for remote type '{remote_type}'.")
+        return
+
+    flag = choose_from_list(flags, "Select a flag to edit:")
+    if not flag:
+        return
+
+    new_value = input(f"Enter the new value for '{flag}' (leave empty to remove the value): ").strip()
+    config["flags"][remote_type][flag] = new_value
+    print(f"Flag '{flag}' updated successfully.")
+    save_config(config)
+
+def delete_flag(config: Dict[str, Any]) -> None:
+    """Deletes a flag from a remote type."""
+    clear_screen()
+    remote_types = list(config["flags"].keys())
+    if not remote_types:
+        print("No remote types available to delete flags from.")
+        return
+
+    remote_type = choose_from_list(remote_types, "Select a remote type to delete a flag:")
+    if not remote_type:
+        return
+
+    flags = list(config["flags"][remote_type].keys())
+    if not flags:
+        print(f"No flags available for remote type '{remote_type}'.")
+        return
+
+    flag = choose_from_list(flags, "Select a flag to delete:")
+    if not flag:
+        return
+
+    del config["flags"][remote_type][flag]
+    print(f"Flag '{flag}' deleted successfully.")
+    save_config(config)
+
+def main() -> None:
+    """Main function to run the script."""
+    config = load_config()
+
     while True:
-        print("\nManage remote type configurations.\n")
-        for index, action in enumerate(ACTIONS, start=1):
-            print(f"{index}. {list(action.keys())[0]}")
+        clear_screen()
+        print("Configuration Management Tool")
+        print("1. View Configuration")
+        print("2. Add Remote Type")
+        print("3. Delete Remote Type")
+        print("4. Add Flag")
+        print("5. Edit Flag")
+        print("6. Delete Flag")
+        print("7. Exit")
+        choice = input("Enter your choice: ").strip()
 
-        action = list(ACTIONS[get_valid_index(ACTIONS) - 1].values())[0]
-        if action is None:
+        if choice == '1':
+            view_config(config)
+        elif choice == '2':
+            add_remote_type(config)
+        elif choice == '3':
+            delete_remote_type(config)
+        elif choice == '4':
+            add_flag(config)
+        elif choice == '5':
+            edit_flag(config)
+        elif choice == '6':
+            delete_flag(config)
+        elif choice == '7':
+            print("Exiting...")
             break
-        action()
+        else:
+            print("Invalid choice. Please try again.")
 
 if __name__ == "__main__":
-    manage_configurations()
+    main()

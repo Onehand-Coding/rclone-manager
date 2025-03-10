@@ -53,3 +53,14 @@ def choose_from_list(items: List[str], prompt: str) -> Optional[str]:
         if choice.isdigit() and 1 <= int(choice) <= len(items):
             return items[int(choice) - 1]
         print("Invalid choice. Please enter a valid number.")
+
+
+def list_rclone_remotes() -> List[str]:
+    """Lists available rclone remotes."""
+    try:
+        output = subprocess.run(["rclone", "listremotes"], capture_output=True, text=True, check=True)
+        remotes = [remote.strip() for remote in output.stdout.splitlines() if "shared" not in remote]
+        return sorted(remotes)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error retrieving Rclone remotes: {e.stderr.strip()}")
+        return []

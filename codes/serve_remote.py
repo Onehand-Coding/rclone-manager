@@ -6,7 +6,7 @@ import threading
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from utils import get_ip_address, choose_from_list, is_rclone_installed
+from utils import get_ip_address, choose_from_list, is_rclone_installed, list_rclone_remotes
 from config import configure_logging, CONFIG_FILE, DEFAULT_CONFIG, DEFAULT_PORT, USERNAME, PASSWORD, BACKENDS
 
 logger = logging.getLogger(__name__)
@@ -14,15 +14,6 @@ logger = logging.getLogger(__name__)
 # Cache for configuration data
 _config_cache: Optional[Dict[str, Any]] = None
 
-def list_rclone_remotes() -> List[str]:
-    """Lists available rclone remotes."""
-    try:
-        output = subprocess.run(["rclone", "listremotes"], capture_output=True, text=True, check=True)
-        remotes = [remote.strip() for remote in output.stdout.splitlines() if "shared" not in remote]
-        return sorted(remotes)
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error retrieving Rclone remotes: {e.stderr.strip()}")
-        return []
 
 def get_remote_type(remote: str) -> Optional[str]:
     """Gets the type of remote from rclone config."""
