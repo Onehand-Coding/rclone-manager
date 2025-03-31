@@ -1,14 +1,19 @@
+import sys
 import json
+import time
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
 
 from utils import clear_screen, choose_from_list
-from config import CONFIG_FILE, DEFAULT_CONFIG
+from config import configure_logging, CONFIG_FILE, DEFAULT_CONFIG
+
+logger = logging.getLogger(__name__)
 
 def load_config() -> Dict[str, Any]:
     """Loads the configuration from the config file."""
     if not CONFIG_FILE.exists():
-        print("Config file not found. Creating a default one.")
+        logger.warning("Config file not found. Creating a default one.")
         with open(CONFIG_FILE, "w") as f:
             json.dump(DEFAULT_CONFIG, f, indent=4)
         return DEFAULT_CONFIG
@@ -19,7 +24,7 @@ def save_config(config: Dict[str, Any]) -> None:
     """Saves the configuration to the config file."""
     with open(CONFIG_FILE, "w") as f:
         json.dump(config, f, indent=4)
-    print("Configuration saved successfully!")
+    logger.info("Configuration saved successfully!")
 
 def view_config(config: Dict[str, Any]) -> None:
     """Displays the current configuration."""
@@ -31,7 +36,7 @@ def view_config(config: Dict[str, Any]) -> None:
 def add_remote_type(config: Dict[str, Any]) -> None:
     """Adds a new remote type to the configuration."""
     clear_screen()
-    remote_type = input("Enter the name of the new remote type: ").strip()
+    remote_type = input("Enter the name of the new remote type: ").strip().lower()
     if not remote_type:
         print("Invalid remote type name.")
         return
@@ -136,6 +141,7 @@ def delete_flag(config: Dict[str, Any]) -> None:
 
 def main() -> None:
     """Main function to run the script."""
+    configure_logging()
     config = load_config()
 
     while True:
@@ -169,4 +175,8 @@ def main() -> None:
             print("Invalid choice. Please try again.")
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        logger.info("Script Interrupted, Bye!")
+        sys.exit()

@@ -23,19 +23,60 @@ def is_rclone_installed() -> bool:
         logger.error(f"Error checking rclone installation: {e}")
         return False
 
-def get_ip_address() -> str:
-    """Retrieves the non-loopback IP address of the machine."""
+def get_ip_address() -> Optional[str]:
+    """Get the best available IP (prioritizes hotspot if available)."""
     try:
         if platform.system() == "Windows":
-            output = subprocess.run(["ipconfig"], capture_output=True, text=True, check=True).stdout
-            ip_matches = re.findall(r"IPv4 Address[\. ]+: (\d+\.\d+\.\d+\.\d+)", output)
+            # Windows: Use ipconfig
+            output = subprocess.run(
+                ["ipconfig"], 
+                capture_output=True, 
+                text=True, 
+                check=True
+            ).stdout
+            ip_matches = re.findall(
+                r"IPv4 Address[\. ]+: (\d+\.\d+\.\d+\.\d+)", 
+                output, 
+                flags=re.IGNORECASE
+            )
         else:
-            output = subprocess.run(["ip", "route", "get", "1"], capture_output=True, text=True, check=True).stdout
-            ip_matches = re.findall(r"src (\d+\.\d+\.\d+\.\d+)", output)
-        return ip_matches[0] if ip_matches else "127.0.0.1"
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error fetching IP address: {e}")
-        return "127.0.0.1"
+            # Unix-like: Use `ip route` (modern) or `ifconfig` (fallback)
+            try:
+                # Try `ip route` first (best for Termux)
+                output = subprocess.run(
+                    ["ip", "route", "get", "1"], 
+                    capture_output=True, 
+                    text=True, 
+                    check=True
+                ).stdout
+                ip_matches = re.findall(r"src (\d+\.\d+\.\d+\.\d+)", output)
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                # Fallback to `ifconfig` (older systems)
+                output = subprocess.run(
+                    ["ifconfig"], 
+                    capture_output=True, 
+                    text=True, 
+                    check=True
+                ).stdout
+                ip_matches = re.findall(r"inet (\d+\.\d+\.\d+\.\d+)", output)
+
+        # Filter out loopback (127.0.0.1) and link-local (169.254.x.x)
+        valid_ips = [
+            ip for ip in ip_matches 
+            if not ip.startswith("127.") 
+            and not ip.startswith("169.254.")
+        ]
+
+        # Prioritize hotspot IP (192.168.x.x)
+        for ip in valid_ips:
+            if ip.startswith("192.168."):
+                return ip  # Hotspot IP found!
+
+        # Return the first valid IP if no hotspot found
+        return valid_ips[0] if valid_ips else None
+
+    except Exception:
+        return None  # No network? Return None instead of 127.0.0.1
 
 
 def clear_screen() -> None:
@@ -88,7 +129,7 @@ def navigate_local_file_system() -> str:
     current_path = Path.home()  # Start from the user's home directory
     while True:
         clear_screen()
-        print("Choose local folder to serve")
+        print("Choose a local folder")
         print(f"\nCurrent Directory: {current_path}")
         folders = list_local_folders(current_path)
         print("[0] To select this folder")

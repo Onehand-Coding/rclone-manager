@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from utils import get_ip_address, choose_from_list, is_rclone_installed, list_rclone_remotes
-from config import configure_logging, CONFIG_FILE, DEFAULT_CONFIG, DEFAULT_PORT, USERNAME, PASSWORD, BACKENDS
+from config import configure_logging, LOG_LEVEL, CONFIG_FILE, DEFAULT_CONFIG, DEFAULT_PORT, USERNAME, PASSWORD, BACKENDS
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +57,8 @@ def get_flags(remote_type: str, shared: bool = False) -> List[str]:
         flags.append(key)
         if value:
             flags.append(value)
+    if LOG_LEVEL == "DEBUG":
+        flags.append("-vv")
     return flags
 
 def serve_remote(remote: str, backend: str, port: int = DEFAULT_PORT, shared: bool = False, user: str = USERNAME, passw: str = PASSWORD) -> None:
