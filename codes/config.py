@@ -14,8 +14,12 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # Constants
 ROOT_DIR = Path(__file__).parent.parent
-CONFIG_FILE = ROOT_DIR / "data" / "config.json"
-LOG_FILE = ROOT_DIR / "logs" / "rclone_scripts.log"
+CONFIG_DIR = ROOT_DIR / "data"
+CONFIG_DIR.mkdir(exist_ok=True)
+LOG_DIR = ROOT_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+CONFIG_FILE = CONFIG_DIR / "config.json"
+LOG_FILE = LOG_DIR / "rclone_scripts.log"
 BACKENDS = ["FTP", "WebDAV"]
 DEFAULT_CONFIG = {
     "flags": {
@@ -24,6 +28,7 @@ DEFAULT_CONFIG = {
         "google photos": {}
     }
 }
+
 
 def configure_logging() -> None:
     """Configures logging with file rotation and console output."""
