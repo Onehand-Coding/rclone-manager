@@ -1,5 +1,6 @@
-*.sublime-project-files/
+*.sublime-*
 __pycache__/
+.venv/
 logs/
 .env
 
