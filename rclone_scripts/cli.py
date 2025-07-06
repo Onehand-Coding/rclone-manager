@@ -1,5 +1,7 @@
 import argparse
 from rich.console import Console
+from .config import setup_env
+from .configs import PROJECT_ROOT
 from .core import (
     serve_remote,
     serve_local,
@@ -15,6 +17,7 @@ def main():
     """
     The main function of the rclone-scripts CLI.
     """
+    setup_env(PROJECT_ROOT)
     parser = argparse.ArgumentParser(description="Rclone Scripts")
     subparsers = parser.add_subparsers(dest="command")
 

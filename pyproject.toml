@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rclone-manager-cli"
+version = "1.0.0"
+description = "A CLI tool to simplify common rclone operations."
+readme = "README.md"
+requires-python = ">=3.8"
+
+dependencies = [
+    "python-dotenv",
+    "rich",
+    "markdown-it-py",
+    "mdurl",
+    "pygments",
+]
+
+[project.scripts]
+rclone-manager = "rclone_scripts.cli:main"
+
+# This tells Hatchling exactly which directory contains the package.
+[tool.hatch.build.targets.wheel]
+packages = ["rclone_scripts"]
