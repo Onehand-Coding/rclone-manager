@@ -1,7 +1,7 @@
 import argparse
 from rich.console import Console
 from .config import setup_env
-from .configs import PROJECT_ROOT
+from .config import PROJECT_ROOT
 from .core import (
     serve_remote,
     serve_local,
