@@ -22,4 +22,4 @@ rclone-manager = "rclone_scripts.cli:main"
 
 # This tells Hatchling exactly which directory contains the package.
 [tool.hatch.build.targets.wheel]
-packages = ["rclone_scripts"]
+packages = ["src/rclone_scripts"]
