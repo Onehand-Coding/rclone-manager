@@ -18,8 +18,8 @@ dependencies = [
 ]
 
 [project.scripts]
-rclone-manager = "rclone_scripts.cli:main"
+rclone-manager = "rclone_manager.cli:main"
 
 # This tells Hatchling exactly which directory contains the package.
 [tool.hatch.build.targets.wheel]
-packages = ["src/rclone_scripts"]
+packages = ["src/rclone_manager"]
