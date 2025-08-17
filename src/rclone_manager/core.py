@@ -5,6 +5,7 @@ from configparser import ConfigParser
 
 from rich.prompt import Prompt
 
+from .config import PROJECT_ROOT
 from .utils import (
     choose_from_list,
     get_ip_address,
@@ -388,3 +389,38 @@ def sync_remotes():
     console.print(f"[green]Syncing {source_path} to {destination_path}...[/green]")
     command = ["rclone", "sync", source_path, destination_path, "--progress"]
     subprocess.run(command)
+
+
+
+def generate_default_config():
+    """
+    Generates a default config.ini file with example configuration.
+    """
+    config_path = os.path.join(PROJECT_ROOT, "config.ini")
+
+    if os.path.exists(config_path):
+        console.print("[yellow]config.ini already exists. Remove it first to generate a new one.[/yellow]")
+        return
+
+    config = ConfigParser()
+
+    # Add DEFAULT section
+    config['DEFAULT'] = {
+        'LOG_LEVEL': 'INFO',
+        'LOG_FILE': 'logs/rclone_scripts.log',
+        'DEFAULT_PORT': '8080',
+        'USERNAME': 'your_username',
+        'PASSWORD': 'your_secret_password'
+    }
+
+    # Add rclone_flags section with examples
+    config['rclone_flags'] = {
+        'mega': '--vfs-cache-mode=full\n--vfs-cache-max-size=1G\n--vfs-cache-max-age=24h',
+        'drive': '--vfs-cache-mode=full\n--vfs-cache-max-size=2G',
+        'google photos': '--gphotos-read-size\n--vfs-cache-mode=full\n--vfs-cache-max-size=10G\n--vfs-cache-max-age=24h'
+    }
+
+    with open(config_path, 'w') as configfile:
+        config.write(configfile)
+
+    console.print(f"[green]Successfully created default config at {config_path}[/green]")

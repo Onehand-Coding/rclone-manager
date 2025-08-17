@@ -8,7 +8,8 @@ from .core import (
     upload_backup,
     download_backup,
     sync_remotes,
-    manage_config
+    manage_config,
+    generate_default_config,
 )
 
 console = Console()
@@ -21,6 +22,11 @@ def main():
     setup_env(PROJECT_ROOT)
     parser = argparse.ArgumentParser(description="Rclone Scripts")
     subparsers = parser.add_subparsers(dest="command")
+
+    # Generate config command
+    generate_parser = subparsers.add_parser(
+    "generate-config", help="Generate a default config.ini file"
+    )
 
     # Serve remote command
     serve_remote_parser = subparsers.add_parser(
@@ -69,6 +75,8 @@ def main():
             manage_config()
         elif args.command == "sync":
             sync_remotes()
+        elif args.command == "generate-config":
+            generate_default_config()
         else:
             parser.print_help()
     except KeyboardInterrupt:
