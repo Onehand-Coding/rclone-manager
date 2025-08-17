@@ -8,6 +8,7 @@ from .core import (
     upload_backup,
     download_backup,
     sync_remotes,
+    manage_config
 )
 
 console = Console()
