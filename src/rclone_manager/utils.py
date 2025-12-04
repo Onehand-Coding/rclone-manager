@@ -184,3 +184,6 @@ def navigate_remote_file_system(remote: str) -> Union[List[str], str]:
         except subprocess.CalledProcessError:
             console.print("[bold red]Error listing remote directory.[/bold red]")
             return current_path
+
+
+

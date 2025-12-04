@@ -11,7 +11,7 @@ from .core import (
     manage_config,
     generate_default_config,
 )
-from .webui import main as webui_main
+from .webui_launcher import main as webui_main
 
 
 console = Console()
