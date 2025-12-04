@@ -11,6 +11,8 @@ from .core import (
     manage_config,
     generate_default_config,
 )
+from .webui import main as webui_main
+
 
 console = Console()
 
@@ -60,6 +62,11 @@ def main():
         "config", help="Manage rclone flags in config.ini"
     )
 
+    # Web UI command
+    webui_parser = subparsers.add_parser(
+        "web-ui", help="Launch web-based user interface"
+    )
+
     args = parser.parse_args()
 
     try:
@@ -77,6 +84,8 @@ def main():
             sync_remotes()
         elif args.command == "generate-config":
             generate_default_config()
+        elif args.command == "web-ui":
+            webui_main()
         else:
             parser.print_help()
     except KeyboardInterrupt:
