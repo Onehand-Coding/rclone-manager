@@ -8,8 +8,16 @@ from .core import (
     upload_backup,
     download_backup,
     sync_remotes,
+    mount_remote,
+    unmount_remote,
     manage_config,
     generate_default_config,
+    check_remote,
+    ls_remote,
+    dedupe_remote,
+    space_remote,
+    copy_between,
+    bisync_remotes,
 )
 from .webui_launcher import main as webui_main
 
@@ -67,6 +75,23 @@ def main():
         "web-ui", help="Launch web-based user interface"
     )
 
+    # Mounting
+    mount_parser = subparsers.add_parser("mount", help="Mount a remote as a local directory")
+    unmount_parser = subparsers.add_parser("unmount", help="Unmount active rclone mounts")
+
+    # Additional Utils
+    ls_parser = subparsers.add_parser("ls", help="Browse and list contents of a remote")
+
+    checksum_parser = subparsers.add_parser("checksum", help="Verify integrity between local and remote")
+
+    dedupe_parser = subparsers.add_parser("dedupe", help="Find and remove duplicate files on a remote")
+
+    space_parser = subparsers.add_parser("space", help="Show quota and storage usage for remotes")
+
+    copy_between_parser = subparsers.add_parser("copy-between", help="Copy files directly between two remotes")
+
+    bisync_parser = subparsers.add_parser("bisync", help="Two-way sync between two remotes")
+
     args = parser.parse_args()
 
     try:
@@ -86,6 +111,22 @@ def main():
             generate_default_config()
         elif args.command == "web-ui":
             webui_main()
+        elif args.command == "mount":
+            mount_remote()
+        elif args.command == "unmount":
+            unmount_remote()
+        elif args.command == "ls":
+            ls_remote()
+        elif args.command == "checksum":
+            check_remote()
+        elif args.command == "dedupe":
+            dedupe_remote()
+        elif args.command == "space":
+            space_remote()
+        elif args.command == "copy-between":
+            copy_between()
+        elif args.command == "bisync":
+            bisync_remotes()
         else:
             parser.print_help()
     except KeyboardInterrupt:

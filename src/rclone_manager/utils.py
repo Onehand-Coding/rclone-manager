@@ -143,7 +143,8 @@ def navigate_remote_file_system(remote: str) -> Union[List[str], str]:
     current_path = f"{remote}:"
     while True:
         try:
-            output = subprocess.check_output(["rclone", "lsf", current_path]).decode("utf-8")
+            with console.status("[dim]Loading...[/dim]"):
+                output = subprocess.check_output(["rclone", "lsf", current_path]).decode("utf-8")
             items = sorted(output.strip().split("\n"))
 
             console.print(f"\n[bold cyan]Current Remote Path:[/bold cyan] {current_path}")
