@@ -86,6 +86,11 @@ def unmount_remote():
         result = subprocess.run(["fusermount", "-u", mp])
         if result.returncode == 0:
             console.print(f"[green]✅ Unmounted {mp}[/green]")
+            try:
+                os.rmdir(mp)
+                console.print(f"[dim]Removed {mp}[/dim]")
+            except OSError:
+                pass  # not empty or already gone, skip silently
         else:
             console.print(f"[red]Failed to unmount {mp}[/red]")
 
