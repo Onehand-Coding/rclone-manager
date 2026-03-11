@@ -16,6 +16,7 @@ def find_project_root(marker: str = "pyproject.toml") -> Path:
         current_path = current_path.parent
     raise FileNotFoundError(f"Project root marker '{marker}' not found.")
 
+
 try:
     PROJECT_ROOT = find_project_root()
 except FileNotFoundError as e:
@@ -36,8 +37,8 @@ def setup_env(root_dir: str):
     config.read(config_path)
 
     # Process the [DEFAULT] section explicitly, as it's not in config.sections()
-    if 'DEFAULT' in config:
-        for key, value in config['DEFAULT'].items():
+    if "DEFAULT" in config:
+        for key, value in config["DEFAULT"].items():
             os.environ[key.upper()] = value
 
     # Process all other named sections like [rclone_flags]
@@ -45,7 +46,7 @@ def setup_env(root_dir: str):
         # Get the items specifically from this section
         section_items = config.items(section_name)
         for key, value in section_items:
-             # Create an environment variable like RCLONE_FLAGS_MEGA
+            # Create an environment variable like RCLONE_FLAGS_MEGA
             os.environ[f"{section_name.upper()}_{key.upper()}"] = value
 
 

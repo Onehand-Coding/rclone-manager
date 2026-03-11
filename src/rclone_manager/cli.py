@@ -1,15 +1,17 @@
 import argparse
+
 from rich.console import Console
+
 from .config import setup_env
 from .config import PROJECT_ROOT
+from .mount import mount_remote, unmount_remote
+from .webui_launcher import main as webui_main
 from .core import (
     serve_remote,
     serve_local,
     upload_backup,
     download_backup,
     sync_remotes,
-    mount_remote,
-    unmount_remote,
     manage_config,
     generate_default_config,
     check_remote,
@@ -19,8 +21,6 @@ from .core import (
     copy_between,
     bisync_remotes,
 )
-from .webui_launcher import main as webui_main
-
 
 console = Console()
 
@@ -35,7 +35,7 @@ def main():
 
     # Generate config command
     generate_parser = subparsers.add_parser(
-    "generate-config", help="Generate a default config.ini file"
+        "generate-config", help="Generate a default config.ini file"
     )
 
     # Serve remote command
@@ -51,19 +51,21 @@ def main():
     # Upload command
     upload_parser = subparsers.add_parser("upload", help="Upload a backup")
     upload_parser.add_argument(
-        "--overwrite", action="store_true", help="Overwrite existing files at the destination."
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing files at the destination.",
     )
 
     # Download command
     download_parser = subparsers.add_parser("download", help="Download a backup")
     download_parser.add_argument(
-        "--overwrite", action="store_true", help="Overwrite existing files at the destination."
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing files at the destination.",
     )
 
     # Sync command
-    sync_parser = subparsers.add_parser(
-        "sync", help="Sync between two rclone remotes"
-    )
+    sync_parser = subparsers.add_parser("sync", help="Sync between two rclone remotes")
 
     # Config command
     config_parser = subparsers.add_parser(
@@ -76,21 +78,35 @@ def main():
     )
 
     # Mounting
-    mount_parser = subparsers.add_parser("mount", help="Mount a remote as a local directory")
-    unmount_parser = subparsers.add_parser("unmount", help="Unmount active rclone mounts")
+    mount_parser = subparsers.add_parser(
+        "mount", help="Mount a remote as a local directory"
+    )
+    unmount_parser = subparsers.add_parser(
+        "unmount", help="Unmount active rclone mounts"
+    )
 
     # Additional Utils
     ls_parser = subparsers.add_parser("ls", help="Browse and list contents of a remote")
 
-    checksum_parser = subparsers.add_parser("checksum", help="Verify integrity between local and remote")
+    checksum_parser = subparsers.add_parser(
+        "checksum", help="Verify integrity between local and remote"
+    )
 
-    dedupe_parser = subparsers.add_parser("dedupe", help="Find and remove duplicate files on a remote")
+    dedupe_parser = subparsers.add_parser(
+        "dedupe", help="Find and remove duplicate files on a remote"
+    )
 
-    space_parser = subparsers.add_parser("space", help="Show quota and storage usage for remotes")
+    space_parser = subparsers.add_parser(
+        "space", help="Show quota and storage usage for remotes"
+    )
 
-    copy_between_parser = subparsers.add_parser("copy-between", help="Copy files directly between two remotes")
+    copy_between_parser = subparsers.add_parser(
+        "copy-between", help="Copy files directly between two remotes"
+    )
 
-    bisync_parser = subparsers.add_parser("bisync", help="Two-way sync between two remotes")
+    bisync_parser = subparsers.add_parser(
+        "bisync", help="Two-way sync between two remotes"
+    )
 
     args = parser.parse_args()
 

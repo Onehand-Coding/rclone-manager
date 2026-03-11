@@ -4,6 +4,7 @@ import threading
 from configparser import ConfigParser
 
 from rich.prompt import Prompt
+from rich.console import Console
 
 from .config import PROJECT_ROOT
 from .utils import (
@@ -15,84 +16,8 @@ from .utils import (
     navigate_remote_file_system,
     list_rclone_remotes,
 )
-from rich.console import Console
 
 console = Console()
-
-
-def mount_remote(unmount: bool = False):
-    mount_base = os.path.expanduser(os.environ.get("MOUNT_DIR", "~/mnt"))
-
-    if unmount:
-        # Find and unmount everything under ~/mnt
-        for entry in os.listdir(mount_base):
-            mp = os.path.join(mount_base, entry)
-            subprocess.run(["fusermount", "-u", mp])
-            console.print(f"[yellow]Unmounted {mp}[/yellow]")
-        return
-
-    remotes = list_rclone_remotes()
-    if not remotes:
-        console.print("[bold red]No rclone remotes found.[/bold red]")
-        return
-
-    selected_remotes = choose_from_list(remotes, "Select remote(s) to mount:")
-    if not isinstance(selected_remotes, list):
-        selected_remotes = [selected_remotes]
-
-    for remote in selected_remotes:
-        mount_point = os.path.join(mount_base, remote.replace(" ", "_"))
-        os.makedirs(mount_point, exist_ok=True)
-
-        remote_type = get_remote_type(remote)
-        flags = get_rclone_flags(remote_type)
-
-        command = ["rclone", "mount", f"{remote}:", mount_point] + flags
-        console.print(f"[green]Mounting [bold]{remote}[/bold] → {mount_point}[/green]")
-        console.print(f"[dim]Command: {' '.join(command)}[/dim]")
-
-        # Popen so it's non-blocking — runs in background
-        with console.status(f"[dim]Mounting {remote}...[/dim]"):
-            subprocess.Popen(command)
-
-    console.print("\n[bold cyan]Mounts active. Run [bold]rclone-manager unmount[/bold] to clean up.[/bold cyan]")
-
-
-def unmount_remote():
-    mount_base = os.path.expanduser(os.environ.get("MOUNT_DIR", "~/mnt"))
-
-    if not os.path.exists(mount_base):
-        console.print("[yellow]No mounts directory found.[/yellow]")
-        return
-
-    active = [d for d in os.listdir(mount_base)
-              if os.path.ismount(os.path.join(mount_base, d))]
-
-    if not active:
-        console.print("[yellow]No active mounts found.[/yellow]")
-        return
-
-    options = ["All"] + active
-    selected = choose_from_list(options, "Select mount(s) to unmount:")
-    if not selected:
-        return
-
-    to_unmount = active if selected == "All" else (
-        selected if isinstance(selected, list) else [selected]
-    )
-
-    for name in to_unmount:
-        mp = os.path.join(mount_base, name)
-        result = subprocess.run(["fusermount", "-u", mp])
-        if result.returncode == 0:
-            console.print(f"[green]✅ Unmounted {mp}[/green]")
-            try:
-                os.rmdir(mp)
-                console.print(f"[dim]Removed {mp}[/dim]")
-            except OSError:
-                pass  # not empty or already gone, skip silently
-        else:
-            console.print(f"[red]Failed to unmount {mp}[/red]")
 
 
 def serve_remote():
@@ -113,9 +38,7 @@ def serve_remote():
     if not isinstance(selected_remotes, list):
         selected_remotes = [selected_remotes]
 
-    backend = choose_from_list(
-        ["http", "webdav", "ftp"], "Select the backend to use:"
-    )
+    backend = choose_from_list(["http", "webdav", "ftp"], "Select the backend to use:")
     if not backend:
         return
 
@@ -141,9 +64,9 @@ def serve_remote():
                 jobs_to_run.append({"remote": remote, "port": port + 1, "shared": True})
                 port += 2  # Increment port by 2 for the next remote
             else:
-                port += 1 # Increment port by 1
+                port += 1  # Increment port by 1
         else:
-            port += 1 # Increment port by 1
+            port += 1  # Increment port by 1
 
     # 2. Execution Phase: Start all planned jobs.
     threads = []
@@ -171,7 +94,9 @@ def serve_remote():
         thread.join()
 
 
-def _serve_remote_thread(remote: str, backend: str, port: int, user: str, passw: str, shared: bool):
+def _serve_remote_thread(
+    remote: str, backend: str, port: int, user: str, passw: str, shared: bool
+):
     """
     A helper function to serve a remote in a separate thread.
     """
@@ -181,7 +106,7 @@ def _serve_remote_thread(remote: str, backend: str, port: int, user: str, passw:
     remote_path = f"{remote}:"
 
     # For Google Drive, we need to handle the shared flag carefully.
-    if remote_type == 'drive':
+    if remote_type == "drive":
         # If we are serving the SHARED drive...
         if shared:
             # We use the specially named remote for shared drives (e.g., Gdrive-shared:)
@@ -200,14 +125,20 @@ def _serve_remote_thread(remote: str, backend: str, port: int, user: str, passw:
 
     # Build the final command
     command = [
-        "rclone", "serve", backend, remote_path,
-        "--addr", f"{ip_address}:{port}",
-        "--user", user,
-        "--pass", passw,
+        "rclone",
+        "serve",
+        backend,
+        remote_path,
+        "--addr",
+        f"{ip_address}:{port}",
+        "--user",
+        user,
+        "--pass",
+        passw,
     ] + flags
 
     # Determine the display name for the log message
-    display_name = f"{remote} (Shared)" if shared and remote_type == 'drive' else remote
+    display_name = f"{remote} (Shared)" if shared and remote_type == "drive" else remote
 
     console.print(
         f"[green]Starting server for [bold]{display_name}[/bold] on http://{ip_address}:{port}[/green]"
@@ -228,9 +159,7 @@ def serve_local():
     if not local_path:
         return
 
-    backends = choose_from_list(
-        ["http", "webdav", "ftp"], "Select the backend to use:"
-    )
+    backends = choose_from_list(["http", "webdav", "ftp"], "Select the backend to use:")
     if not backends:
         return
     backend = backends[0] if isinstance(backends, list) else backends
@@ -267,21 +196,28 @@ def upload_backup(overwrite: bool = False):
     """
     console.rule("[bold]⬆️ Upload[/bold]")
 
-    console.print("\n[bold cyan]-- Step 1: Select Local Files/Folder to Upload --[/bold cyan]")
+    console.print(
+        "\n[bold cyan]-- Step 1: Select Local Files/Folder to Upload --[/bold cyan]"
+    )
     local_selection = navigate_local_file_system()
-    if not local_selection: return
+    if not local_selection:
+        return
 
     console.print("\n[bold cyan]-- Step 2: Select a Remote --[/bold cyan]")
     remotes = list_rclone_remotes()
-    if not remotes: return
+    if not remotes:
+        return
     remote = choose_from_list(remotes, "Select the destination remote:")
-    if not remote: return
+    if not remote:
+        return
 
-    console.print("\n[bold cyan]-- Step 3: Select Remote Destination Folder --[/bold cyan]")
+    console.print(
+        "\n[bold cyan]-- Step 3: Select Remote Destination Folder --[/bold cyan]"
+    )
     remote_dir = navigate_remote_file_system(remote)
     # Ensure the remote path is treated as a directory
     if not remote_dir.endswith("/"):
-        remote_dir = remote_dir.strip('/') + "/"
+        remote_dir = remote_dir.strip("/") + "/"
 
     console.rule(f"[green]Starting Upload[/green]")
 
@@ -308,7 +244,13 @@ def upload_backup(overwrite: bool = False):
         console.print(f"Uploading {len(file_names)} files from {base_dir}...")
 
         # Use '--files-from' with '-' to read from stdin
-        command = base_command + ["--files-from", "-", base_dir, remote_dir, "--progress"]
+        command = base_command + [
+            "--files-from",
+            "-",
+            base_dir,
+            remote_dir,
+            "--progress",
+        ]
 
         # Pass the list of filenames to the command
         process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True)
@@ -323,17 +265,26 @@ def download_backup(overwrite: bool = False):
     """
     console.rule("[bold]⬇️ Download[/bold]")
 
-    console.print("\n[bold cyan]-- Step 1: Select a Remote to Download From --[/bold cyan]")
+    console.print(
+        "\n[bold cyan]-- Step 1: Select a Remote to Download From --[/bold cyan]"
+    )
     remotes = list_rclone_remotes()
-    if not remotes: return
+    if not remotes:
+        return
     remote = choose_from_list(remotes, "Select the source remote:")
-    if not remote: return
+    if not remote:
+        return
 
-    console.print("\n[bold cyan]-- Step 2: Select Remote Files/Folders to Download --[/bold cyan]")
+    console.print(
+        "\n[bold cyan]-- Step 2: Select Remote Files/Folders to Download --[/bold cyan]"
+    )
     remote_selection = navigate_remote_file_system(remote)
-    if not remote_selection: return
+    if not remote_selection:
+        return
 
-    console.print("\n[bold cyan]-- Step 3: Select Local Destination Folder --[/bold cyan]")
+    console.print(
+        "\n[bold cyan]-- Step 3: Select Local Destination Folder --[/bold cyan]"
+    )
     local_dir = navigate_local_file_system()
     if not local_dir or os.path.isfile(local_dir):
         console.print("[red]Invalid destination. You must select a directory.[/red]")
@@ -347,23 +298,35 @@ def download_backup(overwrite: bool = False):
         base_command.append("--ignore-times")
 
     if isinstance(remote_selection, str):
-        console.print(f"Downloading {os.path.basename(remote_selection.rstrip('/'))} to {local_dir}...")
+        console.print(
+            f"Downloading {os.path.basename(remote_selection.rstrip('/'))} to {local_dir}..."
+        )
         command = base_command + [remote_selection, local_dir, "--progress"]
         subprocess.run(command)
     else:
         files_to_download_list = remote_selection
 
         if overwrite:
-            console.print(f"Downloading {len(files_to_download_list)} items one by one to ensure overwrite...")
+            console.print(
+                f"Downloading {len(files_to_download_list)} items one by one to ensure overwrite..."
+            )
             for item in files_to_download_list:
                 console.print(f"Downloading 📄 {os.path.basename(item.rstrip('/'))}...")
                 command = base_command + [item, local_dir, "--progress"]
                 subprocess.run(command)
         else:
             remote_path_base = os.path.dirname(files_to_download_list[0]) + "/"
-            file_names_only = [os.path.basename(f.rstrip('/')) for f in files_to_download_list]
+            file_names_only = [
+                os.path.basename(f.rstrip("/")) for f in files_to_download_list
+            ]
             console.print(f"Downloading {len(file_names_only)} items to {local_dir}...")
-            command = base_command + ["--files-from", "-", remote_path_base, local_dir, "--progress"]
+            command = base_command + [
+                "--files-from",
+                "-",
+                remote_path_base,
+                local_dir,
+                "--progress",
+            ]
             process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True)
             process.communicate("\n".join(file_names_only))
 
@@ -374,15 +337,15 @@ def manage_config():
     """
     Provides a menu to manage rclone flags in the config.ini file.
     """
-    config_path = 'config.ini'
+    config_path = "config.ini"
     config = ConfigParser()
     config.read(config_path)
 
-    if 'rclone_flags' not in config:
-        config['rclone_flags'] = {}
+    if "rclone_flags" not in config:
+        config["rclone_flags"] = {}
 
     def save_changes():
-        with open(config_path, 'w') as f:
+        with open(config_path, "w") as f:
             config.write(f)
         console.print("[green]Configuration saved successfully![/green]")
 
@@ -392,10 +355,12 @@ def manage_config():
         console.print("2. Add/Edit Flag for a Remote Type")
         console.print("3. Delete Flag from a Remote Type")
         console.print("4. Exit")
-        choice = Prompt.ask("Enter your choice", choices=["1", "2", "3", "4"], default="4")
+        choice = Prompt.ask(
+            "Enter your choice", choices=["1", "2", "3", "4"], default="4"
+        )
 
         if choice == "1":
-            for remote_type, flags in config['rclone_flags'].items():
+            for remote_type, flags in config["rclone_flags"].items():
                 console.print(f"\n[bold]{remote_type}[/bold]:")
                 # The flags are a single string, so we split it for display
                 for flag in flags.splitlines():
@@ -404,32 +369,40 @@ def manage_config():
             input("\nPress Enter to continue...")
 
         elif choice == "2":
-            remote_type = Prompt.ask("Enter the remote type (e.g., drive, mega)").lower()
-            flag_to_add = Prompt.ask("Enter the full flag to add/edit (e.g., --vfs-cache-mode=full)")
+            remote_type = Prompt.ask(
+                "Enter the remote type (e.g., drive, mega)"
+            ).lower()
+            flag_to_add = Prompt.ask(
+                "Enter the full flag to add/edit (e.g., --vfs-cache-mode=full)"
+            )
 
             # Get existing flags or start fresh
-            existing_flags = config.get('rclone_flags', remote_type, fallback='').splitlines()
+            existing_flags = config.get(
+                "rclone_flags", remote_type, fallback=""
+            ).splitlines()
             # The key of the flag (e.g., --vfs-cache-mode)
-            flag_key = flag_to_add.split('=')[0]
+            flag_key = flag_to_add.split("=")[0]
 
             # Remove any old version of the flag and add the new one
             new_flags = [f for f in existing_flags if not f.startswith(flag_key)]
             new_flags.append(flag_to_add)
 
-            config['rclone_flags'][remote_type] = "\n".join(new_flags)
+            config["rclone_flags"][remote_type] = "\n".join(new_flags)
             save_changes()
 
         elif choice == "3":
             remote_type = Prompt.ask("Enter the remote type").lower()
-            if not config.has_option('rclone_flags', remote_type):
+            if not config.has_option("rclone_flags", remote_type):
                 console.print(f"[red]No flags found for '{remote_type}'.[/red]")
                 continue
 
-            flag_to_delete = Prompt.ask("Enter the flag key to delete (e.g., --vfs-cache-mode)")
-            existing_flags = config.get('rclone_flags', remote_type).splitlines()
+            flag_to_delete = Prompt.ask(
+                "Enter the flag key to delete (e.g., --vfs-cache-mode)"
+            )
+            existing_flags = config.get("rclone_flags", remote_type).splitlines()
             new_flags = [f for f in existing_flags if not f.startswith(flag_to_delete)]
 
-            config['rclone_flags'][remote_type] = "\n".join(new_flags)
+            config["rclone_flags"][remote_type] = "\n".join(new_flags)
             save_changes()
 
         elif choice == "4":
@@ -473,32 +446,35 @@ def generate_default_config():
     config_path = os.path.join(PROJECT_ROOT, "config.ini")
 
     if os.path.exists(config_path):
-        console.print("[yellow]config.ini already exists. Remove it first to generate a new one.[/yellow]")
+        console.print(
+            "[yellow]config.ini already exists. Remove it first to generate a new one.[/yellow]"
+        )
         return
 
     config = ConfigParser()
 
     # Add DEFAULT section
-    config['DEFAULT'] = {
-        'LOG_LEVEL': 'INFO',
-        'LOG_FILE': 'logs/rclone_scripts.log',
-        'DEFAULT_PORT': '8080',
-        'USERNAME': 'your_username',
-        'PASSWORD': 'your_secret_password'
+    config["DEFAULT"] = {
+        "LOG_LEVEL": "INFO",
+        "LOG_FILE": "logs/rclone_scripts.log",
+        "DEFAULT_PORT": "8080",
+        "USERNAME": "your_username",
+        "PASSWORD": "your_secret_password",
     }
 
     # Add rclone_flags section with examples
-    config['rclone_flags'] = {
-        'mega': '--vfs-cache-mode=full\n--vfs-cache-max-size=1G\n--vfs-cache-max-age=24h',
-        'drive': '--vfs-cache-mode=full\n--vfs-cache-max-size=2G',
-        'google photos': '--gphotos-read-size\n--vfs-cache-mode=full\n--vfs-cache-max-size=10G\n--vfs-cache-max-age=24h'
+    config["rclone_flags"] = {
+        "mega": "--vfs-cache-mode=full\n--vfs-cache-max-size=1G\n--vfs-cache-max-age=24h",
+        "drive": "--vfs-cache-mode=full\n--vfs-cache-max-size=2G",
+        "google photos": "--gphotos-read-size\n--vfs-cache-mode=full\n--vfs-cache-max-size=10G\n--vfs-cache-max-age=24h",
     }
 
-    with open(config_path, 'w') as configfile:
+    with open(config_path, "w") as configfile:
         config.write(configfile)
 
-    console.print(f"[green]Successfully created default config at {config_path}[/green]")
-
+    console.print(
+        f"[green]Successfully created default config at {config_path}[/green]"
+    )
 
 
 def check_remote(overwrite: bool = False):
@@ -533,7 +509,9 @@ def check_remote(overwrite: bool = False):
     if result.returncode == 0:
         console.print("[bold green]✅ All files match![/bold green]")
     else:
-        console.print("[bold yellow]⚠️ Differences found. Check output above.[/bold yellow]")
+        console.print(
+            "[bold yellow]⚠️ Differences found. Check output above.[/bold yellow]"
+        )
 
 
 def ls_remote():
@@ -607,14 +585,20 @@ def dedupe_remote():
 
     mode = choose_from_list(
         ["interactive", "first", "newest", "oldest", "largest", "smallest", "rename"],
-        "Select dedupe mode:"
+        "Select dedupe mode:",
     )
     if not mode:
         return
 
-    console.print(f"\n[yellow]⚠️  Running dedupe in [bold]{mode}[/bold] mode on {remote_path}[/yellow]")
+    console.print(
+        f"\n[yellow]⚠️  Running dedupe in [bold]{mode}[/bold] mode on {remote_path}[/yellow]"
+    )
     if mode != "interactive":
-        confirm = Prompt.ask("Are you sure? This may delete files. (y/n)", choices=["y", "n"], default="n")
+        confirm = Prompt.ask(
+            "Are you sure? This may delete files. (y/n)",
+            choices=["y", "n"],
+            default="n",
+        )
         if confirm != "y":
             console.print("[dim]Cancelled.[/dim]")
             return
@@ -636,7 +620,9 @@ def space_remote():
         console.print("[bold red]No rclone remotes found.[/bold red]")
         return
 
-    selected = choose_from_list(remotes, "Select remote(s) to check (e.g., 1 or 1,2 or 'all'):")
+    selected = choose_from_list(
+        remotes, "Select remote(s) to check (e.g., 1 or 1,2 or 'all'):"
+    )
     if not selected:
         return
     if not isinstance(selected, list):
@@ -647,13 +633,14 @@ def space_remote():
         try:
             with console.status(f"[dim]Fetching quota for {remote}...[/dim]"):
                 result = subprocess.run(
-                    ["rclone", "about", f"{remote}:"],
-                    capture_output=True, text=True
+                    ["rclone", "about", f"{remote}:"], capture_output=True, text=True
                 )
             if result.returncode == 0:
                 console.print(result.stdout)
             else:
-                console.print(f"[yellow]⚠️  {remote}: quota info not available ({result.stderr.strip()})[/yellow]")
+                console.print(
+                    f"[yellow]⚠️  {remote}: quota info not available ({result.stderr.strip()})[/yellow]"
+                )
         except Exception as e:
             console.print(f"[red]Error checking {remote}: {e}[/red]")
 
@@ -728,7 +715,7 @@ def bisync_remotes():
     resync = Prompt.ask(
         "\n[yellow]Run with --resync? (required on first run) (y/n)[/yellow]",
         choices=["y", "n"],
-        default="n"
+        default="n",
     )
 
     console.rule("[green]Starting Bisync[/green]")
