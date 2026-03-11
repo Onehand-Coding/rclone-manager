@@ -21,7 +21,7 @@ console = Console()
 
 
 def mount_remote(unmount: bool = False):
-    mount_base = os.path.expanduser("~/mnt")
+    mount_base = os.path.expanduser(os.environ.get("MOUNT_DIR", "~/mnt"))
 
     if unmount:
         # Find and unmount everything under ~/mnt
@@ -59,7 +59,7 @@ def mount_remote(unmount: bool = False):
 
 
 def unmount_remote():
-    mount_base = os.path.expanduser("~/mnt")
+    mount_base = os.path.expanduser(os.environ.get("MOUNT_DIR", "~/mnt"))
 
     if not os.path.exists(mount_base):
         console.print("[yellow]No mounts directory found.[/yellow]")
@@ -72,15 +72,20 @@ def unmount_remote():
         console.print("[yellow]No active mounts found.[/yellow]")
         return
 
-    selected = choose_from_list(active, "Select mount(s) to unmount:")
-    if not isinstance(selected, list):
-        selected = [selected]
+    options = ["All"] + active
+    selected = choose_from_list(options, "Select mount(s) to unmount:")
+    if not selected:
+        return
 
-    for name in selected:
+    to_unmount = active if selected == "All" else (
+        selected if isinstance(selected, list) else [selected]
+    )
+
+    for name in to_unmount:
         mp = os.path.join(mount_base, name)
         result = subprocess.run(["fusermount", "-u", mp])
         if result.returncode == 0:
-            console.print(f"[green]Unmounted {mp}[/green]")
+            console.print(f"[green]✅ Unmounted {mp}[/green]")
         else:
             console.print(f"[red]Failed to unmount {mp}[/red]")
 
