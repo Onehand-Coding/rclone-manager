@@ -84,6 +84,9 @@ def choose_from_list(
         return None
 
     selected_indices = [int(i.strip()) - 1 for i in choices_str.split(",")]
+    if any(i < 0 or i >= len(items) for i in selected_indices):
+        console.print("[bold red]Invalid choice.[/bold red]")
+        return None
     selected_items = [items[i] for i in selected_indices]
 
     return selected_items[0] if len(selected_items) == 1 else selected_items
