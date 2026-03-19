@@ -83,7 +83,7 @@ def _build_command(pair: dict) -> list:
         return ["rclone", "sync", remote, local]
     elif mode == "two_way":
         cmd = ["rclone", "bisync", local, remote]
-        if not pair.get("bisync_resync_done"):
+        if not pair.get("bisync_resync_done") or os.name == "nt":
             cmd.append("--resync")
         return cmd
     return []
@@ -274,9 +274,7 @@ def sync_pairs_run():
 
         if returncode == 0:
             console.print(f"[green]✅ {pair['name']} completed.[/green]")
-            # Mark bisync resync done on success
             if pair["mode"] == "two_way" and not pair.get("bisync_resync_done"):
-                pair["bisync_resync_done"] = True
                 all_pairs = _load_pairs()
                 for p in all_pairs:
                     if p["name"] == pair["name"]:
@@ -287,6 +285,12 @@ def sync_pairs_run():
             if errors:
                 for e in errors:
                     console.print(f"[red]   {e}[/red]")
+            if pair["mode"] == "two_way":
+                all_pairs = _load_pairs()
+                for p in all_pairs:
+                    if p["name"] == pair["name"]:
+                        p["bisync_resync_done"] = False
+                _save_pairs(all_pairs)
 
 
 def sync_pairs_remove():
