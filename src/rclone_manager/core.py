@@ -145,10 +145,11 @@ def _serve_remote_thread(
     )
     console.print(f"[dim]Command: {' '.join(command)}[/dim]")
 
-    try:
-        subprocess.run(command, check=True)
-    except subprocess.CalledProcessError as e:
-        console.print(f"[bold red]Error serving {remote_path}: {e}[/bold red]")
+    with console.status(f"[dim]Serving {display_name}...[/dim]"):
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as e:
+            console.print(f"[bold red]Error serving {remote_path}: {e}[/bold red]")
 
 
 def serve_local():
@@ -187,7 +188,8 @@ def serve_local():
     ]
 
     console.print(f"[dim]Command: {' '.join(command)}[/dim]")
-    subprocess.run(command)
+    with console.status(f"[dim]Serving {local_path}...[/dim]"):
+        subprocess.run(command)
 
 
 def upload_backup(overwrite: bool = False):
@@ -229,8 +231,9 @@ def upload_backup(overwrite: bool = False):
     if isinstance(local_selection, str):
         # If it's a single item (file or directory), copy it directly.
         # rclone handles whether it's a file or directory correctly.
-        command = base_command + [local_selection, remote_dir, "--progress"]
-        subprocess.run(command)
+        command = base_command + [local_selection, remote_dir]
+        with console.status(f"[dim]Uploading {os.path.basename(local_selection)}...[/dim]"):
+            subprocess.run(command)
     else:
         # If it's a list of files, we must use the '--files-from' flag
         # This is more efficient than running 'rclone copy' for every single file.
@@ -249,12 +252,12 @@ def upload_backup(overwrite: bool = False):
             "-",
             base_dir,
             remote_dir,
-            "--progress",
         ]
 
         # Pass the list of filenames to the command
-        process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True)
-        process.communicate("\n".join(file_names))
+        with console.status(f"[dim]Uploading {len(file_names)} files...[/dim]"):
+            process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True)
+            process.communicate("\n".join(file_names))
 
     console.rule(f"[bold green]✅ Upload Complete[/bold green]")
 
@@ -301,8 +304,9 @@ def download_backup(overwrite: bool = False):
         console.print(
             f"Downloading {os.path.basename(remote_selection.rstrip('/'))} to {local_dir}..."
         )
-        command = base_command + [remote_selection, local_dir, "--progress"]
-        subprocess.run(command)
+        command = base_command + [remote_selection, local_dir]
+        with console.status(f"[dim]Downloading {os.path.basename(remote_selection.rstrip('/'))}...[/dim]"):
+            subprocess.run(command)
     else:
         files_to_download_list = remote_selection
 
@@ -312,8 +316,9 @@ def download_backup(overwrite: bool = False):
             )
             for item in files_to_download_list:
                 console.print(f"Downloading 📄 {os.path.basename(item.rstrip('/'))}...")
-                command = base_command + [item, local_dir, "--progress"]
-                subprocess.run(command)
+                command = base_command + [item, local_dir]
+                with console.status(f"[dim]Downloading {os.path.basename(item.rstrip('/'))}...[/dim]"):
+                    subprocess.run(command)
         else:
             remote_path_base = os.path.dirname(files_to_download_list[0]) + "/"
             file_names_only = [
@@ -325,10 +330,10 @@ def download_backup(overwrite: bool = False):
                 "-",
                 remote_path_base,
                 local_dir,
-                "--progress",
             ]
-            process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True)
-            process.communicate("\n".join(file_names_only))
+            with console.status(f"[dim]Downloading {len(file_names_only)} items...[/dim]"):
+                process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True)
+                process.communicate("\n".join(file_names_only))
 
     console.rule(f"[bold green]✅ Download Complete[/bold green]")
 
@@ -435,8 +440,9 @@ def sync_remotes():
         return
 
     console.print(f"[green]Syncing {source_path} to {destination_path}...[/green]")
-    command = ["rclone", "sync", source_path, destination_path, "--progress"]
-    subprocess.run(command)
+    command = ["rclone", "sync", source_path, destination_path]
+    with console.status(f"[dim]Syncing {source_path} → {destination_path}...[/dim]"):
+        subprocess.run(command)
 
 
 def generate_default_config():
@@ -502,7 +508,7 @@ def check_remote(overwrite: bool = False):
         return
 
     console.rule("[green]Running Check[/green]")
-    command = ["rclone", "check", local_path, remote_path, "--progress"]
+    command = ["rclone", "check", local_path, remote_path]
     with console.status("[dim]Checking files...[/dim]"):
         result = subprocess.run(command)
 
@@ -679,7 +685,7 @@ def copy_between():
     console.rule("[green]Starting Remote-to-Remote Copy[/green]")
     console.print(f"[dim]{source_path} → {dest_path}[/dim]")
 
-    command = ["rclone", "copy", source_path, dest_path, "--progress"]
+    command = ["rclone", "copy", source_path, dest_path]
     with console.status(f"[dim]Copying {source_path} → {dest_path}...[/dim]"):
         subprocess.run(command)
     console.rule("[bold green]✅ Copy Complete[/bold green]")
@@ -721,7 +727,7 @@ def bisync_remotes():
     console.rule("[green]Starting Bisync[/green]")
     console.print(f"[dim]{path1} ↔ {path2}[/dim]")
 
-    command = ["rclone", "bisync", path1, path2, "--progress"]
+    command = ["rclone", "bisync", path1, path2]
     if resync == "y":
         command.append("--resync")
 

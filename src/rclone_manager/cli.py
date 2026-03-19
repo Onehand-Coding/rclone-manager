@@ -6,6 +6,8 @@ from .config import setup_env
 from .config import PROJECT_ROOT
 from .mount import mount_remote, unmount_remote
 from .webui_launcher import main as webui_main
+from .sync_pairs import sync_pairs
+from .status import show_status
 from .core import (
     serve_remote,
     serve_local,
@@ -108,6 +110,13 @@ def main():
         "bisync", help="Two-way sync between two remotes"
     )
 
+    sync_pairs_parser = subparsers.add_parser(
+        "sync-pairs", help="Manage and run sync pairs"
+    )
+    status_parser = subparsers.add_parser(
+        "status", help="Show active mounts and sync pairs"
+    )
+
     args = parser.parse_args()
 
     try:
@@ -143,6 +152,10 @@ def main():
             copy_between()
         elif args.command == "bisync":
             bisync_remotes()
+        elif args.command == "sync-pairs":
+            sync_pairs()
+        elif args.command == "status":
+            show_status()
         else:
             parser.print_help()
     except KeyboardInterrupt:
