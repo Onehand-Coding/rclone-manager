@@ -6,7 +6,7 @@ from .config import setup_env
 from .config import PROJECT_ROOT
 from .mount import mount_remote, unmount_remote
 from .webui_launcher import main as webui_main
-from .sync_pairs import sync_pairs
+from .sync_pairs import sync_pairs, sync_pairs_add, sync_pairs_list, sync_pairs_run, sync_pairs_remove
 from .status import show_status
 from .core import (
     serve_remote,
@@ -113,6 +113,10 @@ def main():
     sync_pairs_parser = subparsers.add_parser(
         "sync-pairs", help="Manage and run sync pairs"
     )
+    sync_pairs_parser.add_argument(
+        "action", nargs="?", choices=["add", "list", "run", "remove"],
+        help="Action to perform (optional, interactive if omitted)"
+    )
     status_parser = subparsers.add_parser(
         "status", help="Show active mounts and sync pairs"
     )
@@ -153,7 +157,13 @@ def main():
         elif args.command == "bisync":
             bisync_remotes()
         elif args.command == "sync-pairs":
-            sync_pairs()
+            if hasattr(args, "action") and args.action:
+                if args.action == "add": sync_pairs_add()
+                elif args.action == "list": sync_pairs_list()
+                elif args.action == "run": sync_pairs_run()
+                elif args.action == "remove": sync_pairs_remove()
+            else:
+                sync_pairs()
         elif args.command == "status":
             show_status()
         else:
