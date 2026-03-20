@@ -67,10 +67,42 @@ rclone-manager/
 Contains:
 - **DEFAULT section**: Log level, port, username/password for serving
 - **rclone_flags section**: Custom flags per remote type (mega, drive, google photos)
+- **filters section**: Global exclude/include patterns for transfers
 
 ### sync-pairs.json
 
 Defines automated sync tasks with modes like upload-only, download-only, sync, and two-way bisync.
+
+### Filters
+
+Global exclude/include patterns are applied to all upload, download, and sync operations.
+
+**Default exclude patterns:**
+- `.git/`, `.venv/`, `__pycache__/`
+- `*.pyc`, `*.pyo`, `.DS_Store`, `Thumbs.db`
+- `*.tmp`, `*.swp`, `.cache/`, `node_modules/`
+
+**Manage filters:**
+```bash
+# Interactive filter management
+uv run rclone-manager filters
+
+# Add temporary excludes during upload/download
+# Prompts for patterns like: *.log, temp/, .git/
+```
+
+**Per-pair filters** (in `sync-pairs.json`):
+```json
+{
+  "name": "Work Docs",
+  "local": "/home/user/Work",
+  "remote": "drive:Backup/Work",
+  "mode": "upload_only",
+  "filters": {
+    "exclude": ["*.tmp", "drafts/"]
+  }
+}
+```
 
 ## Usage
 
@@ -196,6 +228,12 @@ Launch browser-based file manager.
 uv run rclone-manager config
 ```
 Manage rclone flags in config.ini interactively.
+
+#### Manage Filters
+```bash
+uv run rclone-manager filters
+```
+Interactively manage global exclude/include patterns.
 
 ## Navigation Guide
 

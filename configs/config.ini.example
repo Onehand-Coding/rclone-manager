@@ -36,3 +36,25 @@ google photos =
     --vfs-cache-mode=full
     --vfs-cache-max-size=10G
     --vfs-cache-max-age=24h
+
+; -----------------------------------------------------------------------------
+; Exclude/Include Filters
+;
+; Global patterns applied to upload, download, sync, and ls operations.
+; Uses rclone's filter syntax: https://rclone.org/filter/
+; Use a new line for each pattern.
+; -----------------------------------------------------------------------------
+
+[filters]
+exclude =
+    .git/
+    .venv/
+    __pycache__/
+    *.pyc
+    *.pyo
+    .DS_Store
+    Thumbs.db
+    *.tmp
+    *.swp
+    .cache/
+    node_modules/

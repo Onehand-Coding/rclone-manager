@@ -70,3 +70,55 @@ def setup_logging():
             RichHandler(),
         ],
     )
+
+
+def get_filters(root_dir: str = None) -> dict:
+    """
+    Load exclude/include filters from config.ini.
+    
+    Returns a dict with 'exclude' and 'include' lists of patterns.
+    """
+    if root_dir is None:
+        try:
+            root_dir = PROJECT_ROOT
+        except Exception:
+            return {"exclude": [], "include": []}
+    
+    config_path = os.path.join(root_dir, "configs", "config.ini")
+    filters = {"exclude": [], "include": []}
+    
+    if not os.path.exists(config_path):
+        return filters
+    
+    config = ConfigParser()
+    config.read(config_path)
+    
+    if "filters" not in config:
+        return filters
+    
+    # Parse exclude patterns
+    if "exclude" in config["filters"]:
+        exclude_str = config["filters"]["exclude"]
+        # Split by newlines and clean up each pattern
+        patterns = [p.strip() for p in exclude_str.strip().split("\n") if p.strip()]
+        filters["exclude"] = patterns
+    
+    # Parse include patterns
+    if "include" in config["filters"]:
+        include_str = config["filters"]["include"]
+        patterns = [p.strip() for p in include_str.strip().split("\n") if p.strip()]
+        filters["include"] = patterns
+    
+    return filters
+
+
+def build_filter_args(filters: dict) -> list:
+    """
+    Convert filter dict to rclone command-line arguments.
+    """
+    args = []
+    for pattern in filters.get("exclude", []):
+        args.extend(["--exclude", pattern])
+    for pattern in filters.get("include", []):
+        args.extend(["--include", pattern])
+    return args

@@ -79,24 +79,44 @@ def _save_pairs(pairs: list):
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 def _build_command(pair: dict) -> list:
+    """Build rclone command for a sync pair with filters applied."""
+    from .config import PROJECT_ROOT, get_filters, build_filter_args
+    
     local = pair["local"]
     remote = pair["remote"]
     mode = pair["mode"]
-
+    
+    # Get global filters and merge with pair-specific filters
+    global_filters = get_filters(PROJECT_ROOT)
+    pair_filters = pair.get("filters", {})
+    
+    # Merge filters (pair filters extend global filters)
+    exclude = global_filters["exclude"] + pair_filters.get("exclude", [])
+    include = global_filters["include"] + pair_filters.get("include", [])
+    merged_filters = {"exclude": exclude, "include": include}
+    
+    # Build base command
     if mode == "upload_only":
-        return ["rclone", "copy", local, remote]
+        cmd = ["rclone", "copy", local, remote]
     elif mode == "download_only":
-        return ["rclone", "copy", remote, local]
+        cmd = ["rclone", "copy", remote, local]
     elif mode == "upload_delete":
-        return ["rclone", "sync", local, remote]
+        cmd = ["rclone", "sync", local, remote]
     elif mode == "download_delete":
-        return ["rclone", "sync", remote, local]
+        cmd = ["rclone", "sync", remote, local]
     elif mode == "two_way":
         cmd = ["rclone", "bisync", local, remote]
         if not pair.get("bisync_resync_done") or os.name == "nt":
             cmd.append("--resync")
+        # Note: bisync has its own filter handling
+        cmd.extend(build_filter_args(merged_filters))
         return cmd
-    return []
+    else:
+        return []
+    
+    # Add filter arguments
+    cmd.extend(build_filter_args(merged_filters))
+    return cmd
 
 
 def _run_with_spinner(pair: dict, command: list):
@@ -216,6 +236,26 @@ def sync_pairs_add():
         return
     mode = mode_keys[mode_labels.index(selected_mode_label)]
 
+    # Optional: Add pair-specific filters
+    console.print("\n[dim]Add pair-specific exclude patterns? (comma-separated, or skip)[/dim]")
+    console.print("[dim]Examples: *.log, temp/, drafts/[/dim]")
+    exclude_input = Prompt.ask("Exclude patterns", default="")
+    
+    pair_filters = {}
+    if exclude_input.strip():
+        patterns = [p.strip() for p in exclude_input.split(",") if p.strip()]
+        if patterns:
+            pair_filters["exclude"] = patterns
+    
+    console.print("\n[dim]Add pair-specific include patterns? (comma-separated, or skip)[/dim]")
+    console.print("[dim]Examples: important/*, projects/*.pdf[/dim]")
+    include_input = Prompt.ask("Include patterns", default="")
+    
+    if include_input.strip():
+        patterns = [p.strip() for p in include_input.split(",") if p.strip()]
+        if patterns:
+            pair_filters["include"] = patterns
+
     pair = {
         "name": name,
         "local": local,
@@ -223,6 +263,9 @@ def sync_pairs_add():
         "mode": mode,
         "bisync_resync_done": False,
     }
+    
+    if pair_filters:
+        pair["filters"] = pair_filters
 
     pairs.append(pair)
     _save_pairs(pairs)
@@ -242,13 +285,23 @@ def sync_pairs_list():
     table.add_column("Mode")
     table.add_column("Local")
     table.add_column("Remote")
+    table.add_column("Filters", style="dim")
 
     for i, p in enumerate(pairs, 1):
         mode_info = MODES.get(p["mode"], {})
         label = mode_info.get("label", p["mode"])
         destructive = mode_info.get("destructive", False)
         mode_display = f"[red]{label}[/red]" if destructive else f"[green]{label}[/green]"
-        table.add_row(str(i), p["name"], mode_display, p["local"], p["remote"])
+        
+        # Show filters if configured
+        filters = p.get("filters", {})
+        filter_str = ""
+        if filters.get("exclude"):
+            filter_str += f"[yellow]Exclude: {', '.join(filters['exclude'])}[/yellow]\n"
+        if filters.get("include"):
+            filter_str += f"[cyan]Include: {', '.join(filters['include'])}[/cyan]"
+        
+        table.add_row(str(i), p["name"], mode_display, p["local"], p["remote"], filter_str)
 
     console.print(table)
 

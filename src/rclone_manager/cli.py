@@ -15,6 +15,7 @@ from .core import (
     download_backup,
     sync_remotes,
     manage_config,
+    manage_filters,
     generate_default_config,
     check_remote,
     ls_remote,
@@ -121,6 +122,10 @@ def main():
         "status", help="Show active mounts and sync pairs"
     )
 
+    filters_parser = subparsers.add_parser(
+        "filters", help="Manage global exclude/include filters"
+    )
+
     args = parser.parse_args()
 
     try:
@@ -166,10 +171,8 @@ def main():
                 sync_pairs()
         elif args.command == "status":
             show_status()
-        elif mode == "move_to_remote":
-            return ["rclone", "move", local, remote]
-        elif mode == "move_to_local":
-            return ["rclone", "move", remote, local]
+        elif args.command == "filters":
+            manage_filters()
         else:
             parser.print_help()
     except KeyboardInterrupt:

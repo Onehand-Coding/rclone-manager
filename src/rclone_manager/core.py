@@ -197,6 +197,8 @@ def upload_backup(overwrite: bool = False):
     """
     Uploads files or a directory to a remote destination.
     """
+    from .config import PROJECT_ROOT, get_filters, build_filter_args
+    
     console.rule("[bold]⬆️ Upload[/bold]")
 
     console.print(
@@ -222,12 +224,28 @@ def upload_backup(overwrite: bool = False):
     if not remote_dir.endswith("/"):
         remote_dir = remote_dir.strip("/") + "/"
 
+    # Optional: Add temporary exclude patterns for this upload
+    console.print("\n[dim]Add exclude patterns for this upload? (comma-separated, or skip)[/dim]")
+    console.print("[dim]Examples: *.log, temp/, __pycache__/[/dim]")
+    exclude_input = Prompt.ask("Exclude patterns", default="")
+    temp_filters = []
+    if exclude_input.strip():
+        temp_filters = [p.strip() for p in exclude_input.split(",") if p.strip()]
+
     console.rule(f"[green]Starting Upload[/green]")
+
+    # Build filter arguments: global filters + temporary upload filters
+    global_filters = get_filters(PROJECT_ROOT)
+    all_exclude = global_filters["exclude"] + temp_filters
+    filter_args = build_filter_args({"exclude": all_exclude, "include": global_filters["include"]})
 
     base_command = ["rclone", "copy"]
     if overwrite:
         console.print("[yellow]Overwrite mode enabled.[/yellow]")
         base_command.append("--ignore-times")
+    
+    # Add filter arguments to command
+    base_command.extend(filter_args)
 
     if isinstance(local_selection, str):
         # If it's a single item (file or directory), copy it directly.
@@ -267,6 +285,8 @@ def download_backup(overwrite: bool = False):
     """
     Downloads one or more files/directories from a remote destination.
     """
+    from .config import PROJECT_ROOT, get_filters, build_filter_args
+    
     console.rule("[bold]⬇️ Download[/bold]")
 
     console.print(
@@ -294,12 +314,28 @@ def download_backup(overwrite: bool = False):
         console.print("[red]Invalid destination. You must select a directory.[/red]")
         return
 
+    # Optional: Add temporary exclude patterns for this download
+    console.print("\n[dim]Add exclude patterns for this download? (comma-separated, or skip)[/dim]")
+    console.print("[dim]Examples: *.tmp, .cache/, Thumbs.db[/dim]")
+    exclude_input = Prompt.ask("Exclude patterns", default="")
+    temp_filters = []
+    if exclude_input.strip():
+        temp_filters = [p.strip() for p in exclude_input.split(",") if p.strip()]
+
     console.rule(f"[green]Starting Download[/green]")
+
+    # Build filter arguments: global filters + temporary download filters
+    global_filters = get_filters(PROJECT_ROOT)
+    all_exclude = global_filters["exclude"] + temp_filters
+    filter_args = build_filter_args({"exclude": all_exclude, "include": global_filters["include"]})
 
     base_command = ["rclone", "copy"]
     if overwrite:
         console.print("[yellow]Overwrite mode enabled (ignoring timestamps).[/yellow]")
         base_command.append("--ignore-times")
+    
+    # Add filter arguments to command
+    base_command.extend(filter_args)
 
     if isinstance(remote_selection, str):
         console.print(
@@ -474,6 +510,23 @@ def generate_default_config():
         "mega": "--vfs-cache-mode=full\n--vfs-cache-max-size=1G\n--vfs-cache-max-age=24h",
         "drive": "--vfs-cache-mode=full\n--vfs-cache-max-size=2G",
         "google photos": "--gphotos-read-size\n--vfs-cache-mode=full\n--vfs-cache-max-size=10G\n--vfs-cache-max-age=24h",
+    }
+
+    # Add filters section with default exclude patterns
+    config["filters"] = {
+        "exclude": "\n".join([
+            ".git/",
+            ".venv/",
+            "__pycache__/",
+            "*.pyc",
+            "*.pyo",
+            ".DS_Store",
+            "Thumbs.db",
+            "*.tmp",
+            "*.swp",
+            ".cache/",
+            "node_modules/",
+        ])
     }
 
     with open(config_path, "w") as configfile:
@@ -760,3 +813,141 @@ def bisync_remotes():
     with console.status(f"[dim]Syncing {path1} ↔ {path2}...[/dim]"):
         subprocess.run(command)
     console.rule("[bold green]✅ Bisync Complete[/bold green]")
+
+
+def manage_filters():
+    """
+    Interactive menu to manage global exclude/include filters.
+    """
+    from .config import get_filters
+    
+    config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
+    
+    def load_config():
+        config = ConfigParser()
+        config.read(config_path)
+        return config
+    
+    def save_config(config):
+        with open(config_path, "w") as f:
+            config.write(f)
+    
+    while True:
+        filters = get_filters(PROJECT_ROOT)
+        
+        console.print("\n[bold cyan]--- Filter Management ---[/bold cyan]")
+        console.print("\n[bold]Current Exclude Patterns:[/bold]")
+        if filters["exclude"]:
+            for i, pattern in enumerate(filters["exclude"], 1):
+                console.print(f"  {i}. [yellow]{pattern}[/yellow]")
+        else:
+            console.print("  [dim]None[/dim]")
+        
+        console.print("\n[bold]Current Include Patterns:[/bold]")
+        if filters["include"]:
+            for i, pattern in enumerate(filters["include"], 1):
+                console.print(f"  {i}. [cyan]{pattern}[/cyan]")
+        else:
+            console.print("  [dim]None[/dim]")
+        
+        console.print("\n1. Add Exclude Pattern")
+        console.print("2. Remove Exclude Pattern")
+        console.print("3. Add Include Pattern")
+        console.print("4. Remove Include Pattern")
+        console.print("5. Reset to Defaults")
+        console.print("6. Exit")
+        
+        choice = Prompt.ask(
+            "\nEnter your choice",
+            choices=["1", "2", "3", "4", "5", "6"],
+            default="6"
+        )
+        
+        if choice == "1":
+            pattern = Prompt.ask("Enter exclude pattern (e.g., *.log, node_modules/)")
+            if pattern:
+                config = load_config()
+                if "filters" not in config:
+                    config["filters"] = {}
+                current = config["filters"].get("exclude", "")
+                patterns = [p.strip() for p in current.split("\n") if p.strip()]
+                patterns.append(pattern)
+                config["filters"]["exclude"] = "\n".join(patterns)
+                save_config(config)
+                console.print(f"[green]✅ Added exclude pattern: {pattern}[/green]")
+        
+        elif choice == "2":
+            if not filters["exclude"]:
+                console.print("[yellow]No exclude patterns to remove.[/yellow]")
+                continue
+            pattern_list = [f"{i}. {p}" for i, p in enumerate(filters["exclude"], 1)]
+            selected = Prompt.ask(
+                "Select pattern to remove",
+                choices=[str(i) for i in range(1, len(filters["exclude"]) + 1)],
+            )
+            idx = int(selected) - 1
+            config = load_config()
+            current = config["filters"].get("exclude", "")
+            patterns = [p.strip() for p in current.split("\n") if p.strip()]
+            removed = patterns.pop(idx)
+            config["filters"]["exclude"] = "\n".join(patterns) if patterns else ""
+            save_config(config)
+            console.print(f"[green]✅ Removed: {removed}[/green]")
+        
+        elif choice == "3":
+            pattern = Prompt.ask("Enter include pattern (e.g., important/*, *.pdf)")
+            if pattern:
+                config = load_config()
+                if "filters" not in config:
+                    config["filters"] = {}
+                current = config["filters"].get("include", "")
+                patterns = [p.strip() for p in current.split("\n") if p.strip()]
+                patterns.append(pattern)
+                config["filters"]["include"] = "\n".join(patterns)
+                save_config(config)
+                console.print(f"[green]✅ Added include pattern: {pattern}[/green]")
+        
+        elif choice == "4":
+            if not filters["include"]:
+                console.print("[yellow]No include patterns to remove.[/yellow]")
+                continue
+            pattern_list = [f"{i}. {p}" for i, p in enumerate(filters["include"], 1)]
+            selected = Prompt.ask(
+                "Select pattern to remove",
+                choices=[str(i) for i in range(1, len(filters["include"]) + 1)],
+            )
+            idx = int(selected) - 1
+            config = load_config()
+            current = config["filters"].get("include", "")
+            patterns = [p.strip() for p in current.split("\n") if p.strip()]
+            removed = patterns.pop(idx)
+            config["filters"]["include"] = "\n".join(patterns) if patterns else ""
+            save_config(config)
+            console.print(f"[green]✅ Removed: {removed}[/green]")
+        
+        elif choice == "5":
+            if Prompt.ask("Reset to default patterns?", choices=["y", "n"], default="n") == "y":
+                config = load_config()
+                if "filters" not in config:
+                    config["filters"] = {}
+                defaults = [
+                    ".git/",
+                    ".venv/",
+                    "__pycache__/",
+                    "*.pyc",
+                    "*.pyo",
+                    ".DS_Store",
+                    "Thumbs.db",
+                    "*.tmp",
+                    "*.swp",
+                    ".cache/",
+                    "node_modules/",
+                ]
+                config["filters"]["exclude"] = "\n".join(defaults)
+                config["filters"]["include"] = ""
+                save_config(config)
+                console.print("[green]✅ Reset to default patterns.[/green]")
+        
+        elif choice == "6":
+            console.print("[dim]Exiting filter management.[/dim]")
+            break
