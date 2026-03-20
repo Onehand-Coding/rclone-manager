@@ -120,10 +120,6 @@ def main():
     status_parser = subparsers.add_parser(
         "status", help="Show active mounts and sync pairs"
     )
-    elif mode == "move_to_remote":
-        return ["rclone", "move", local, remote]
-    elif mode == "move_to_local":
-        return ["rclone", "move", remote, local]
 
     args = parser.parse_args()
 
@@ -170,6 +166,10 @@ def main():
                 sync_pairs()
         elif args.command == "status":
             show_status()
+        elif mode == "move_to_remote":
+            return ["rclone", "move", local, remote]
+        elif mode == "move_to_local":
+            return ["rclone", "move", remote, local]
         else:
             parser.print_help()
     except KeyboardInterrupt:
