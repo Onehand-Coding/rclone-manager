@@ -28,7 +28,9 @@ def _load_registry() -> dict:
 
 
 def _sync_pairs_path() -> str:
-    return os.path.expanduser("~/.config/rclone-manager/sync-pairs.json")
+    """Get the path to sync-pairs.json in the project's configs directory."""
+    from .config import PROJECT_ROOT
+    return os.path.join(PROJECT_ROOT, "configs", "sync-pairs.json")
 
 
 def _load_sync_pairs() -> list:

@@ -58,9 +58,9 @@ MODES = {
 # ── storage ───────────────────────────────────────────────────────────────────
 
 def _config_path() -> str:
-    config_dir = os.path.expanduser("~/.config/rclone-manager")
-    os.makedirs(config_dir, exist_ok=True)
-    return os.path.join(config_dir, "sync-pairs.json")
+    """Get the path to sync-pairs.json in the project's configs directory."""
+    from .config import PROJECT_ROOT
+    return os.path.join(PROJECT_ROOT, "configs", "sync-pairs.json")
 
 
 def _load_pairs() -> list:

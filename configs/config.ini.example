@@ -1,0 +1,38 @@
+; -----------------------------------------------------------------------------
+; Rclone Scripts Manager - Example Configuration
+;
+; To use, copy this file to 'config.ini' and fill in your details.
+; -----------------------------------------------------------------------------
+
+[DEFAULT]
+; --- General Settings ---
+LOG_LEVEL = INFO
+LOG_FILE = logs/rclone_scripts.log
+DEFAULT_PORT = 8080
+
+; --- Credentials for rclone serve ---
+; Replace with the username and password you want to use for FTP/WebDAV/HTTP access.
+USERNAME = your_username
+PASSWORD = your_secret_password
+
+; -----------------------------------------------------------------------------
+; rclone Flags
+;
+; Add custom flags for different rclone remote types.
+; The script will automatically apply these flags when using 'serve-remote'.
+; Use a new line for each flag.
+; -----------------------------------------------------------------------------
+
+[rclone_flags]
+mega =
+    --vfs-cache-mode=full
+    --vfs-cache-max-size=1G
+    --vfs-cache-max-age=24h
+drive =
+    --vfs-cache-mode=full
+    --vfs-cache-max-size=2G
+google photos =
+    --gphotos-read-size
+    --vfs-cache-mode=full
+    --vfs-cache-max-size=10G
+    --vfs-cache-max-age=24h

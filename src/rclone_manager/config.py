@@ -29,7 +29,7 @@ def setup_env(root_dir: str):
     Sets up the environment variables from the config.ini file.
     """
     config = ConfigParser()
-    config_path = os.path.join(root_dir, "config.ini")
+    config_path = os.path.join(root_dir, "configs", "config.ini")
 
     if not os.path.exists(config_path):
         return

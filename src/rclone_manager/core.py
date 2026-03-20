@@ -343,7 +343,7 @@ def manage_config():
     """
     Provides a menu to manage rclone flags in the config.ini file.
     """
-    config_path = "config.ini"
+    config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
     config = ConfigParser()
     config.read(config_path)
 
@@ -450,7 +450,7 @@ def generate_default_config():
     """
     Generates a default config.ini file with example configuration.
     """
-    config_path = os.path.join(PROJECT_ROOT, "config.ini")
+    config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
 
     if os.path.exists(config_path):
         console.print(

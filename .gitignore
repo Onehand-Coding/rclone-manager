@@ -4,5 +4,6 @@ __pycache__/
 logs/
 .ruff_cache/
 .env
-config.ini
+configs/config.ini
+configs/sync-pairs.json
 
