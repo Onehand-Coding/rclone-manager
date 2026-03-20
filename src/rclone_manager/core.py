@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import threading
 from configparser import ConfigParser
@@ -541,31 +542,56 @@ def ls_remote():
         try:
             with console.status(f"[dim]Listing {current_path}...[/dim]"):
                 output = subprocess.check_output(
-                    ["rclone", "lsl", current_path], stderr=subprocess.DEVNULL
+                    ["rclone", "lsjson", current_path],
+                    stderr=subprocess.DEVNULL
                 ).decode("utf-8")
 
-            lines = [l for l in output.strip().split("\n") if l]
-            if not lines:
+            items = json.loads(output)
+            dirs = [i for i in items if i["IsDir"]]
+            files = [i for i in items if not i["IsDir"]]
+
+            if not dirs and not files:
                 console.print("[dim]-- Empty --[/dim]")
-            else:
-                for line in lines:
-                    console.print(f"  {line}")
+
+            for i, d in enumerate(dirs, 1):
+                console.print(f"  {i:>3}. 📁 [bold]{d['Name']}[/bold]")
+
+            for i, f in enumerate(files, len(dirs) + 1):
+                size = f.get("Size", 0)
+                date = f.get("ModTime", "")[:10]
+                if size >= 1_073_741_824:
+                    size_str = f"{size/1_073_741_824:.1f} GB"
+                elif size >= 1_048_576:
+                    size_str = f"{size/1_048_576:.1f} MB"
+                elif size >= 1024:
+                    size_str = f"{size/1024:.1f} KB"
+                else:
+                    size_str = f"{size} B"
+                console.print(f"  {i:>3}. 📄 {f['Name']}  [dim]{size_str}  {date}[/dim]")
 
             choice = Prompt.ask(
-                "\n[yellow]Enter subfolder name to navigate, '..' to go up, or 'q' to quit[/yellow]"
+                "\n[yellow]Number to enter folder, '..' to go up, 'q' to quit[/yellow]"
             )
 
             if choice.lower() == "q":
                 break
             elif choice == "..":
-                if current_path.strip("/") == f"{remote}:".strip("/"):
+                if current_path.rstrip("/") == f"{remote}:":
                     continue
-                current_path = os.path.dirname(current_path.rstrip("/")) + "/"
+                current_path = os.path.dirname(current_path.rstrip("/"))
+                if not current_path.endswith(":"):
+                    current_path += "/"
             else:
-                current_path = current_path.rstrip("/") + "/" + choice.strip("/") + "/"
+                idx = int(choice.strip()) - 1
+                if 0 <= idx < len(dirs):
+                    current_path = current_path.rstrip("/") + "/" + dirs[idx]["Name"] + "/"
+                else:
+                    console.print("[dim]That's a file, not a folder.[/dim]")
 
-        except subprocess.CalledProcessError:
-            console.print("[red]Error listing path. Going back.[/red]")
+        except (ValueError, IndexError):
+            console.print("[bold red]Invalid choice.[/bold red]")
+        except subprocess.CalledProcessError as e:
+            console.print(f"[bold red]Error listing path: {e}[/bold red]")
             current_path = f"{remote}:"
 
 
