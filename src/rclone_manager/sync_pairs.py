@@ -42,6 +42,16 @@ MODES = {
         "description": "Bisync local ↔ remote",
         "destructive": True,
     },
+    "move_to_remote": {
+    "label": "Move to Remote",
+    "description": "Upload local → remote, delete local after transfer",
+    "destructive": True,
+    },
+    "move_to_local": {
+        "label": "Move to Local",
+        "description": "Download remote → local, delete remote after transfer",
+        "destructive": True,
+    },
 }
 
 
