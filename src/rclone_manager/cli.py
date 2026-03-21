@@ -37,17 +37,17 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     # Generate config command
-    generate_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "generate-config", help="Generate a default config.ini file"
     )
 
     # Serve remote command
-    serve_remote_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "serve-remote", help="Serve a remote destination"
     )
 
     # Serve local command
-    serve_local_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "serve-local", help="Serve a local directory"
     )
 
@@ -68,46 +68,64 @@ def main():
     )
 
     # Sync command
-    sync_parser = subparsers.add_parser("sync", help="Sync between two rclone remotes")
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Sync between two rclone remotes (destructive: makes destination match source)",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be transferred without making any changes",
+    )
+    sync_parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="Show files that would be copied/deleted/overwritten before confirming",
+    )
+    sync_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Skip confirmation prompt (use with caution!)",
+    )
 
     # Config command
-    config_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "config", help="Manage rclone flags in config.ini"
     )
 
     # Web UI command
-    webui_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "web-ui", help="Launch web-based user interface"
     )
 
     # Mounting
-    mount_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "mount", help="Mount a remote as a local directory"
     )
-    unmount_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "unmount", help="Unmount active rclone mounts"
     )
 
     # Additional Utils
-    ls_parser = subparsers.add_parser("ls", help="Browse and list contents of a remote")
+    subparsers.add_parser("ls", help="Browse and list contents of a remote")
 
-    checksum_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "checksum", help="Verify integrity between local and remote"
     )
 
-    dedupe_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "dedupe", help="Find and remove duplicate files on a remote"
     )
 
-    space_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "space", help="Show quota and storage usage for remotes"
     )
 
-    copy_between_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "copy-between", help="Copy files directly between two remotes"
     )
 
-    bisync_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "bisync", help="Two-way sync between two remotes"
     )
 
@@ -118,11 +136,11 @@ def main():
         "action", nargs="?", choices=["add", "list", "run", "remove"],
         help="Action to perform (optional, interactive if omitted)"
     )
-    status_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "status", help="Show active mounts and sync pairs"
     )
 
-    filters_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "filters", help="Manage global exclude/include filters"
     )
 
@@ -140,7 +158,10 @@ def main():
         elif args.command == "config":
             manage_config()
         elif args.command == "sync":
-            sync_remotes()
+            if args.dry_run and args.force:
+                console.print("[bold red]Error: --dry-run and --force cannot be used together.[/bold red]")
+                return
+            sync_remotes(dry_run=args.dry_run, preview=args.preview, force=args.force)
         elif args.command == "generate-config":
             generate_default_config()
         elif args.command == "web-ui":
@@ -163,10 +184,14 @@ def main():
             bisync_remotes()
         elif args.command == "sync-pairs":
             if hasattr(args, "action") and args.action:
-                if args.action == "add": sync_pairs_add()
-                elif args.action == "list": sync_pairs_list()
-                elif args.action == "run": sync_pairs_run()
-                elif args.action == "remove": sync_pairs_remove()
+                if args.action == "add":
+                    sync_pairs_add()
+                elif args.action == "list":
+                    sync_pairs_list()
+                elif args.action == "run":
+                    sync_pairs_run()
+                elif args.action == "remove":
+                    sync_pairs_remove()
             else:
                 sync_pairs()
         elif args.command == "status":

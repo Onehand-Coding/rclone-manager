@@ -74,7 +74,7 @@ def list_remote_directory_contents(remote_path):
                     ["rclone", "ls", "--max-depth", "1", f"{remote_path}{item}"]
                 ).decode("utf-8")
                 size = size_output.split()[0] + " bytes" if size_output.split() else "-"
-            except:
+            except Exception:
                 size = "-"
 
             contents.append(
@@ -82,7 +82,7 @@ def list_remote_directory_contents(remote_path):
             )
 
         return sorted(contents, key=lambda x: (not x["is_dir"], x["name"]))
-    except subprocess.CalledProcessError as e:
+    except subprocess.CalledProcessError:
         st.error(f"Error accessing remote path: {remote_path}")
         return []
 

@@ -266,7 +266,7 @@ def mount_remote():
                 pass
 
     _save_registry(registry)
-    console.print(f"\n[dim]To unmount: rman unmount[/dim]")
+    console.print("\n[dim]To unmount: rman unmount[/dim]")
 
 
 def unmount_remote():

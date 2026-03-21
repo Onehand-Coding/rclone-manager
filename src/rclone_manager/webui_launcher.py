@@ -1,7 +1,6 @@
 import subprocess
 import sys
 import os
-import socket
 from pathlib import Path
 
 from .utils import get_ip_address
@@ -40,7 +39,7 @@ def main():
         env["PYTHONPATH"] = current_path
 
     print("Starting Rclone Manager Web UI...")
-    print(f"Access the interface at: http://localhost:8501")
+    print("Access the interface at: http://localhost:8501")
     print(f"On other devices, use: http://{local_ip}:8501")
     print("Press Ctrl+C to stop the server.\n")
 

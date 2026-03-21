@@ -1,12 +1,114 @@
+import json
 import os
 import re
 import socket
 import subprocess
-from typing import List, Union
+import time
+from typing import List, Union, Optional
+
 from rich.console import Console
 from rich.prompt import Prompt
 
 console = Console()
+
+
+def _get_rc_stats(port: int) -> Optional[dict]:
+    """
+    Fetch transfer statistics from rclone's rc API.
+    
+    Args:
+        port: The rc port to connect to
+        
+    Returns:
+        Dict with stats (bytes, totalBytes, speed, transfers, totalTransfers) or None if unavailable
+    """
+    try:
+        result = subprocess.run(
+            ["rclone", "rc", "core/stats", f"--rc-addr=127.0.0.1:{port}"],
+            capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+    except Exception:
+        pass
+    return None
+
+
+def _run_rclone_with_stats(
+    label: str,
+    command: list,
+    rc_port: int = 5580,
+    stdin_data: Optional[str] = None,
+) -> tuple[int, list]:
+    """
+    Run an rclone command with live transfer statistics display.
+    
+    Uses rclone's rc API to poll transfer stats and display:
+    - Files transferred / total files
+    - Bytes transferred / total bytes
+    - Current transfer speed
+    
+    Args:
+        label: Display label for the operation (e.g., "Syncing", "Copying")
+        command: The rclone command to execute (without --rc flags)
+        rc_port: Port for rclone's rc API (default: 5580)
+        stdin_data: Optional data to pipe to stdin (for --files-from)
+        
+    Returns:
+        Tuple of (returncode, error_messages)
+    """
+    # Add rc flags to command
+    command = command + ["--rc", f"--rc-addr=127.0.0.1:{rc_port}"]
+    
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        stdin=subprocess.PIPE if stdin_data else None,
+        text=True,
+    )
+    
+    errors = []
+    with console.status("") as status:
+        while proc.poll() is None:
+            time.sleep(2)
+            stats = _get_rc_stats(rc_port)
+            if stats:
+                transferred = stats.get("bytes", 0)
+                total_bytes = stats.get("totalBytes", 0)
+                speed = stats.get("speed", 0)
+                transfers = stats.get("transfers", 0)
+                total_transfers = stats.get("totalTransfers", 0)
+                
+                # Format bytes for display
+                if total_bytes > 0:
+                    mb_transferred = transferred / 1024 / 1024
+                    mb_total = total_bytes / 1024 / 1024
+                    size_str = f"{mb_transferred:.1f} MB / {mb_total:.1f} MB"
+                else:
+                    mb_transferred = transferred / 1024 / 1024
+                    size_str = f"{mb_transferred:.1f} MB"
+                
+                speed_mb = speed / 1024 / 1024
+                
+                # Build status line
+                if total_transfers > 0:
+                    status.update(
+                        f"[dim]{label} {transfers}/{total_transfers} files  "
+                        f"{speed_mb:.1f} MB/s  {size_str}[/dim]"
+                    )
+                else:
+                    status.update(
+                        f"[dim]{label} {speed_mb:.1f} MB/s  {size_str}[/dim]"
+                    )
+            else:
+                status.update(f"[dim]{label} running...[/dim]")
+    
+    _, stderr = proc.communicate(input=stdin_data)
+    if stderr:
+        errors = [line for line in stderr.strip().splitlines() if "ERROR" in line]
+    
+    return proc.returncode, errors
 
 
 def get_ip_address() -> str:
@@ -82,7 +184,7 @@ def choose_from_list(
     choices_str = Prompt.ask(f"[yellow]{message}[/yellow]")
     if not choices_str:
         return None
-    if any(not i.isdigit() for i in choices_str):
+    if any(not i.strip().isdigit() for i in choices_str.split(",")):
         console.print("[bold red]Invalid choice.[/bold red]")
         return None
 

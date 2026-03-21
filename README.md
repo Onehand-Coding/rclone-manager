@@ -122,9 +122,28 @@ Interactive download from remote storage.
 
 #### Sync Between Remotes
 ```bash
-uv run rclone-manager sync
+uv run rclone-manager sync [--dry-run] [--preview] [--force]
 ```
 Direct sync between two remote storages (no local download).
+
+**⚠️ Warning**: `sync` is **destructive** — files on the destination that don't exist in the source will be deleted.
+
+**Options:**
+- `--dry-run` — Show what would be transferred without making changes
+- `--preview` — Show files that would be copied/deleted/overwritten, then ask for confirmation
+- `--force` — Skip confirmation (use with caution!)
+
+**Examples:**
+```bash
+# Preview what would happen (recommended first)
+uv run rclone-manager sync --preview
+
+# Dry run to test without changes
+uv run rclone-manager sync --dry-run
+
+# Force sync without confirmation (scripted use)
+uv run rclone-manager sync --force
+```
 
 ### Mount & Serve
 

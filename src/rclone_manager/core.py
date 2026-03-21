@@ -9,6 +9,7 @@ from rich.console import Console
 
 from .config import PROJECT_ROOT
 from .utils import (
+    _run_rclone_with_stats,
     choose_from_list,
     get_ip_address,
     get_remote_type,
@@ -232,7 +233,7 @@ def upload_backup(overwrite: bool = False):
     if exclude_input.strip():
         temp_filters = [p.strip() for p in exclude_input.split(",") if p.strip()]
 
-    console.rule(f"[green]Starting Upload[/green]")
+    console.rule("[green]Starting Upload[/green]")
 
     # Build filter arguments: global filters + temporary upload filters
     global_filters = get_filters(PROJECT_ROOT)
@@ -243,7 +244,7 @@ def upload_backup(overwrite: bool = False):
     if overwrite:
         console.print("[yellow]Overwrite mode enabled.[/yellow]")
         base_command.append("--ignore-times")
-    
+
     # Add filter arguments to command
     base_command.extend(filter_args)
 
@@ -251,8 +252,8 @@ def upload_backup(overwrite: bool = False):
         # If it's a single item (file or directory), copy it directly.
         # rclone handles whether it's a file or directory correctly.
         command = base_command + [local_selection, remote_dir]
-        with console.status(f"[dim]Uploading {os.path.basename(local_selection)}...[/dim]"):
-            subprocess.run(command)
+        label = f"Uploading {os.path.basename(local_selection)}"
+        returncode, errors = _run_rclone_with_stats(label, command)
     else:
         # If it's a list of files, we must use the '--files-from' flag
         # This is more efficient than running 'rclone copy' for every single file.
@@ -273,12 +274,16 @@ def upload_backup(overwrite: bool = False):
             remote_dir,
         ]
 
-        # Pass the list of filenames to the command
-        with console.status(f"[dim]Uploading {len(file_names)} files...[/dim]"):
-            process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True)
-            process.communicate("\n".join(file_names))
+        label = f"Uploading {len(file_names)} files"
+        stdin_data = "\n".join(file_names)
+        returncode, errors = _run_rclone_with_stats(label, command, stdin_data=stdin_data)
 
-    console.rule(f"[bold green]✅ Upload Complete[/bold green]")
+    if returncode == 0:
+        console.rule("[bold green]✅ Upload Complete[/bold green]")
+    else:
+        console.print("[red]❌ Upload failed.[/red]")
+        for e in errors:
+            console.print(f"[red]   {e}[/red]")
 
 
 def download_backup(overwrite: bool = False):
@@ -322,7 +327,7 @@ def download_backup(overwrite: bool = False):
     if exclude_input.strip():
         temp_filters = [p.strip() for p in exclude_input.split(",") if p.strip()]
 
-    console.rule(f"[green]Starting Download[/green]")
+    console.rule("[green]Starting Download[/green]")
 
     # Build filter arguments: global filters + temporary download filters
     global_filters = get_filters(PROJECT_ROOT)
@@ -342,8 +347,8 @@ def download_backup(overwrite: bool = False):
             f"Downloading {os.path.basename(remote_selection.rstrip('/'))} to {local_dir}..."
         )
         command = base_command + [remote_selection, local_dir]
-        with console.status(f"[dim]Downloading {os.path.basename(remote_selection.rstrip('/'))}...[/dim]"):
-            subprocess.run(command)
+        label = f"Downloading {os.path.basename(remote_selection.rstrip('/'))}"
+        returncode, errors = _run_rclone_with_stats(label, command)
     else:
         files_to_download_list = remote_selection
 
@@ -354,8 +359,8 @@ def download_backup(overwrite: bool = False):
             for item in files_to_download_list:
                 console.print(f"Downloading 📄 {os.path.basename(item.rstrip('/'))}...")
                 command = base_command + [item, local_dir]
-                with console.status(f"[dim]Downloading {os.path.basename(item.rstrip('/'))}...[/dim]"):
-                    subprocess.run(command)
+                label = f"Downloading {os.path.basename(item.rstrip('/'))}"
+                returncode, errors = _run_rclone_with_stats(label, command)
         else:
             remote_path_base = os.path.dirname(files_to_download_list[0]) + "/"
             file_names_only = [
@@ -368,11 +373,16 @@ def download_backup(overwrite: bool = False):
                 remote_path_base,
                 local_dir,
             ]
-            with console.status(f"[dim]Downloading {len(file_names_only)} items...[/dim]"):
-                process = subprocess.Popen(command, stdin=subprocess.PIPE, text=True)
-                process.communicate("\n".join(file_names_only))
+            label = f"Downloading {len(file_names_only)} items"
+            stdin_data = "\n".join(file_names_only)
+            returncode, errors = _run_rclone_with_stats(label, command, stdin_data=stdin_data)
 
-    console.rule(f"[bold green]✅ Download Complete[/bold green]")
+    if returncode == 0:
+        console.rule("[bold green]✅ Download Complete[/bold green]")
+    else:
+        console.print("[red]❌ Download failed.[/red]")
+        for e in errors:
+            console.print(f"[red]   {e}[/red]")
 
 
 def manage_config():
@@ -451,9 +461,14 @@ def manage_config():
             break
 
 
-def sync_remotes():
+def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = False):
     """
     Syncs between two rclone remotes.
+    
+    Args:
+        dry_run: Show what would change without making any changes
+        preview: Run rclone check first to show diff, then confirm
+        force: Skip confirmation prompt
     """
     remotes = list_rclone_remotes()
     if not remotes:
@@ -476,10 +491,98 @@ def sync_remotes():
     if not destination_path:
         return
 
-    console.print(f"[green]Syncing {source_path} to {destination_path}...[/green]")
+    # Show destructive warning
+    console.print("\n[yellow]⚠️  DESTRUCTIVE OPERATION[/yellow]")
+    console.print(f"[yellow]Source:      {source_path}[/yellow]")
+    console.print(f"[yellow]Destination: {destination_path}[/yellow]")
+    console.print("[yellow]Files on destination not in source will be DELETED permanently.[/yellow]\n")
+
+    # If --preview, run rclone check first
+    if preview:
+        console.print("[bold]Running preview (rclone check)...[/bold]\n")
+        try:
+            result = subprocess.run(
+                ["rclone", "check", source_path, destination_path],
+                capture_output=True, text=True
+            )
+            
+            # Parse the output
+            only_in_source = []
+            only_in_dest = []
+            differ = []
+            
+            for line in result.stdout.strip().split("\n"):
+                if not line.strip():
+                    continue
+                if line.startswith("Only in "):
+                    parts = line.split(":", 1)
+                    if len(parts) > 1:
+                        path = parts[1].strip()
+                        if "src=" in line:
+                            only_in_source.append(path)
+                        elif "dst=" in line:
+                            only_in_dest.append(path)
+                elif line.startswith("The files differ:"):
+                    pass
+                elif line.strip() and not line.startswith("Only in") and not line.startswith("The files"):
+                    differ.append(line.strip())
+            
+            if only_in_source or only_in_dest or differ:
+                if only_in_source:
+                    console.print(f"\n[green]+ {len(only_in_source)} files only in SOURCE (will be COPIED):[/green]")
+                    for f in only_in_source[:10]:
+                        console.print(f"  [green]+ {f}[/green]")
+                    if len(only_in_source) > 10:
+                        console.print(f"  [dim]... and {len(only_in_source) - 10} more[/dim]")
+                
+                if only_in_dest:
+                    console.print(f"\n[red]- {len(only_in_dest)} files only in DESTINATION (will be DELETED):[/red]")
+                    for f in only_in_dest[:10]:
+                        console.print(f"  [red]- {f}[/red]")
+                    if len(only_in_dest) > 10:
+                        console.print(f"  [dim]... and {len(only_in_dest) - 10} more[/dim]")
+                
+                if differ:
+                    console.print(f"\n[yellow]~ {len(differ)} files differ (will be OVERWRITTEN):[/yellow]")
+                    for f in differ[:10]:
+                        console.print(f"  [yellow]~ {f}[/yellow]")
+                    if len(differ) > 10:
+                        console.print(f"  [dim]... and {len(differ) - 10} more[/dim]")
+                
+                console.print()
+            else:
+                console.print("[green]✓ No differences found. Files are identical.[/green]\n")
+                
+        except Exception as e:
+            console.print(f"[yellow]⚠️  Preview failed: {e}[/yellow]\n")
+
+    # Handle confirmation based on flags
+    if dry_run:
+        console.print("[dim]Dry run mode: No changes will be made.[/dim]\n")
+    elif not force:
+        from rich.prompt import Confirm
+        if not Confirm.ask("[bold red]Proceed with sync?[/bold red]", default=False):
+            console.print("[dim]Sync cancelled.[/dim]")
+            return
+
+    # Build command
     command = ["rclone", "sync", source_path, destination_path]
-    with console.status(f"[dim]Syncing {source_path} → {destination_path}...[/dim]"):
-        subprocess.run(command)
+    if dry_run:
+        command.append("--dry-run")
+
+    # Run sync
+    label = "Dry run" if dry_run else "Syncing"
+    returncode, errors = _run_rclone_with_stats(label, command)
+
+    if returncode == 0:
+        if dry_run:
+            console.print("[green]✅ Dry run complete. No changes were made.[/green]")
+        else:
+            console.print("[green]✅ Sync complete.[/green]")
+    else:
+        console.print("[red]❌ Sync failed.[/red]")
+        for e in errors:
+            console.print(f"[red]   {e}[/red]")
 
 
 def generate_default_config():
@@ -765,9 +868,14 @@ def copy_between():
     console.print(f"[dim]{source_path} → {dest_path}[/dim]")
 
     command = ["rclone", "copy", source_path, dest_path]
-    with console.status(f"[dim]Copying {source_path} → {dest_path}...[/dim]"):
-        subprocess.run(command)
-    console.rule("[bold green]✅ Copy Complete[/bold green]")
+    returncode, errors = _run_rclone_with_stats("Copying", command)
+    
+    if returncode == 0:
+        console.rule("[bold green]✅ Copy Complete[/bold green]")
+    else:
+        console.print("[red]❌ Copy failed.[/red]")
+        for e in errors:
+            console.print(f"[red]   {e}[/red]")
 
 
 def bisync_remotes():
@@ -810,9 +918,15 @@ def bisync_remotes():
     if resync == "y":
         command.append("--resync")
 
-    with console.status(f"[dim]Syncing {path1} ↔ {path2}...[/dim]"):
-        subprocess.run(command)
-    console.rule("[bold green]✅ Bisync Complete[/bold green]")
+    label = "Bisync"
+    returncode, errors = _run_rclone_with_stats(label, command)
+    
+    if returncode == 0:
+        console.rule("[bold green]✅ Bisync Complete[/bold green]")
+    else:
+        console.print("[red]❌ Bisync failed.[/red]")
+        for e in errors:
+            console.print(f"[red]   {e}[/red]")
 
 
 def manage_filters():
@@ -880,7 +994,6 @@ def manage_filters():
             if not filters["exclude"]:
                 console.print("[yellow]No exclude patterns to remove.[/yellow]")
                 continue
-            pattern_list = [f"{i}. {p}" for i, p in enumerate(filters["exclude"], 1)]
             selected = Prompt.ask(
                 "Select pattern to remove",
                 choices=[str(i) for i in range(1, len(filters["exclude"]) + 1)],
@@ -911,7 +1024,6 @@ def manage_filters():
             if not filters["include"]:
                 console.print("[yellow]No include patterns to remove.[/yellow]")
                 continue
-            pattern_list = [f"{i}. {p}" for i, p in enumerate(filters["include"], 1)]
             selected = Prompt.ask(
                 "Select pattern to remove",
                 choices=[str(i) for i in range(1, len(filters["include"]) + 1)],

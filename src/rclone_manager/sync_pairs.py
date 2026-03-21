@@ -1,13 +1,12 @@
 import json
 import os
-import subprocess
-import time
 
 from rich.console import Console
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from .utils import (
+    _run_rclone_with_stats,
     choose_from_list,
     list_rclone_remotes,
     navigate_local_file_system,
@@ -81,20 +80,20 @@ def _save_pairs(pairs: list):
 def _build_command(pair: dict) -> list:
     """Build rclone command for a sync pair with filters applied."""
     from .config import PROJECT_ROOT, get_filters, build_filter_args
-    
+
     local = pair["local"]
     remote = pair["remote"]
     mode = pair["mode"]
-    
+
     # Get global filters and merge with pair-specific filters
     global_filters = get_filters(PROJECT_ROOT)
     pair_filters = pair.get("filters", {})
-    
+
     # Merge filters (pair filters extend global filters)
     exclude = global_filters["exclude"] + pair_filters.get("exclude", [])
     include = global_filters["include"] + pair_filters.get("include", [])
     merged_filters = {"exclude": exclude, "include": include}
-    
+
     # Build base command
     if mode == "upload_only":
         cmd = ["rclone", "copy", local, remote]
@@ -113,63 +112,10 @@ def _build_command(pair: dict) -> list:
         return cmd
     else:
         return []
-    
+
     # Add filter arguments
     cmd.extend(build_filter_args(merged_filters))
     return cmd
-
-
-def _run_with_spinner(pair: dict, command: list):
-    """Run rclone command with a live spinner showing transfer stats via rc."""
-    rc_port = 5580  # dedicated port for sync-pairs, outside mount range
-    command = command + ["--rc", f"--rc-addr=127.0.0.1:{rc_port}"]
-
-    proc = subprocess.Popen(
-        command,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-
-    errors = []
-    with console.status("") as status:
-        while proc.poll() is None:
-            time.sleep(2)
-            stats = _get_rc_stats(rc_port)
-            if stats:
-                transferred = stats.get("bytes", 0)
-                speed = stats.get("speed", 0)
-                transfers = stats.get("transfers", 0)
-                total_transfers = stats.get("totalTransfers", 0)
-                mb = transferred / 1024 / 1024
-                speed_mb = speed / 1024 / 1024
-                status.update(
-                    f"[dim]{MODES[pair['mode']]['label']} "
-                    f"{transfers}/{total_transfers} files  "
-                    f"{mb:.1f} MB  "
-                    f"{speed_mb:.1f} MB/s[/dim]"
-                )
-            else:
-                status.update(f"[dim]{MODES[pair['mode']]['label']} running...[/dim]")
-
-    _, stderr = proc.communicate()
-    if stderr:
-        errors = [l for l in stderr.strip().splitlines() if "ERROR" in l]
-
-    return proc.returncode, errors
-
-
-def _get_rc_stats(port: int) -> dict | None:
-    try:
-        result = subprocess.run(
-            ["rclone", "rc", "core/stats", f"--rc-addr=127.0.0.1:{port}"],
-            capture_output=True, text=True, timeout=3
-        )
-        if result.returncode == 0:
-            return json.loads(result.stdout)
-    except Exception:
-        pass
-    return None
 
 
 def _confirm_run(pair: dict) -> bool:
@@ -333,7 +279,8 @@ def sync_pairs_run():
         command = _build_command(pair)
         console.print(f"\n[dim]Command: {' '.join(command)}[/dim]")
 
-        returncode, errors = _run_with_spinner(pair, command)
+        label = MODES[pair['mode']]['label']
+        returncode, errors = _run_rclone_with_stats(label, command)
 
         if returncode == 0:
             console.print(f"[green]✅ {pair['name']} completed.[/green]")
