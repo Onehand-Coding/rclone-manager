@@ -82,6 +82,9 @@ def choose_from_list(
     choices_str = Prompt.ask(f"[yellow]{message}[/yellow]")
     if not choices_str:
         return None
+    if any(not i.isdigit() for i in choices_str):
+        console.print("[bold red]Invalid choice.[/bold red]")
+        return None
 
     selected_indices = [int(i.strip()) - 1 for i in choices_str.split(",")]
     if any(i < 0 or i >= len(items) for i in selected_indices):
