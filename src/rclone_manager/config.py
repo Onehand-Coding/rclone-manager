@@ -115,8 +115,14 @@ def get_filters(root_dir: str = None) -> dict:
 def build_filter_args(filters: dict) -> list:
     """
     Convert filter dict to rclone command-line arguments.
+    
+    Auto-excludes hidden files and directories unless INCLUDE_HIDDEN=true.
+    Hidden exclusion is applied first so user filters can override with --include.
     """
     args = []
+    # Auto-exclude hidden files and dirs unless INCLUDE_HIDDEN=true
+    if os.environ.get("INCLUDE_HIDDEN", "false").lower() != "true":
+        args.extend(["--exclude", ".*", "--exclude", ".*/"])
     for pattern in filters.get("exclude", []):
         args.extend(["--exclude", pattern])
     for pattern in filters.get("include", []):

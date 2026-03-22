@@ -122,6 +122,8 @@ def show_status():
         "upload_delete":   ("Upload + Delete",  "red"),
         "download_delete": ("Download + Delete","red"),
         "two_way":         ("Two-Way",          "red"),
+        "move_to_remote":  ("Move to Remote",   "red"),
+        "move_to_local":   ("Move to Local",    "red"),
     }
 
     if sync_pairs:

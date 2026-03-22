@@ -108,12 +108,7 @@ def _check_pending_uploads(port: int, name: str) -> str:
         "downloadsInProgress", 0
     )
     queued = disk_cache.get("uploadsQueued", 0) + disk_cache.get("downloadsQueued", 0)
-    pending = (
-        disk_cache.get("uploadsInProgress", 0)
-        + disk_cache.get("uploadsQueued", 0)
-        + disk_cache.get("downloadsInProgress", 0)
-        + disk_cache.get("downloadsQueued", 0)
-    )
+    pending = in_progress + queued
 
     if pending == 0:
         return "ok"
@@ -139,8 +134,11 @@ def _check_pending_uploads(port: int, name: str) -> str:
                 if stats is None:
                     break
                 disk_cache = stats.get("diskCache", {})
-                pending = disk_cache.get("uploadsInProgress", 0) + disk_cache.get(
-                    "uploadsQueued", 0
+                pending = (
+                    disk_cache.get("uploadsInProgress", 0)
+                    + disk_cache.get("uploadsQueued", 0)
+                    + disk_cache.get("downloadsInProgress", 0)
+                    + disk_cache.get("downloadsQueued", 0)
                 )
                 status.update(f"[dim]Transferring... {pending} remaining[/dim]")
                 if pending == 0:

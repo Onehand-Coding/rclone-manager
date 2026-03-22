@@ -353,14 +353,25 @@ def download_backup(overwrite: bool = False):
         files_to_download_list = remote_selection
 
         if overwrite:
-            console.print(
-                f"Downloading {len(files_to_download_list)} items one by one to ensure overwrite..."
-            )
+            failed_items = []
             for item in files_to_download_list:
                 console.print(f"Downloading 📄 {os.path.basename(item.rstrip('/'))}...")
                 command = base_command + [item, local_dir]
                 label = f"Downloading {os.path.basename(item.rstrip('/'))}"
-                returncode, errors = _run_rclone_with_stats(label, command)
+                rc, errs = _run_rclone_with_stats(label, command)
+                if rc != 0:
+                    failed_items.append((item, errs))
+
+            if failed_items:
+                console.print(f"\n[red]❌ {len(failed_items)} item(s) failed:[/red]")
+                for item, errs in failed_items:
+                    console.print(f"  [red]{item}[/red]")
+                    for e in errs:
+                        console.print(f"    [red]{e}[/red]")
+            else:
+                console.rule("[bold green]✅ Download Complete[/bold green]")
+            return
+
         else:
             remote_path_base = os.path.dirname(files_to_download_list[0]) + "/"
             file_names_only = [
@@ -406,9 +417,12 @@ def manage_config():
         console.print("1. View Current Flags")
         console.print("2. Add/Edit Flag for a Remote Type")
         console.print("3. Delete Flag from a Remote Type")
-        console.print("4. Exit")
+        console.print("4. Toggle Hidden Files (currently: {})".format(
+            "included" if os.environ.get("INCLUDE_HIDDEN", "false").lower() == "true" else "excluded"
+        ))
+        console.print("5. Exit")
         choice = Prompt.ask(
-            "Enter your choice", choices=["1", "2", "3", "4"], default="4"
+            "Enter your choice", choices=["1", "2", "3", "4", "5"], default="5"
         )
 
         if choice == "1":
@@ -458,6 +472,14 @@ def manage_config():
             save_changes()
 
         elif choice == "4":
+            current = config.get("DEFAULT", "INCLUDE_HIDDEN", fallback="false")
+            new_val = "true" if current.lower() == "false" else "false"
+            config["DEFAULT"]["INCLUDE_HIDDEN"] = new_val
+            os.environ["INCLUDE_HIDDEN"] = new_val
+            save_changes()
+            console.print(f"[green]Hidden files are now {'included' if new_val == 'true' else 'excluded'}.[/green]")
+
+        elif choice == "5":
             break
 
 
@@ -501,32 +523,61 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
     if preview:
         console.print("[bold]Running preview (rclone check)...[/bold]\n")
         try:
-            result = subprocess.run(
-                ["rclone", "check", source_path, destination_path],
+            # Use two-pass approach to properly categorize files
+            # Files only in source (missing on dst)
+            result_src = subprocess.run(
+                ["rclone", "check", source_path, destination_path, "--missing-on-dst"],
+                capture_output=True, text=True
+            )
+
+            # Files only in dest (missing on src)
+            result_dst = subprocess.run(
+                ["rclone", "check", source_path, destination_path, "--missing-on-src"],
                 capture_output=True, text=True
             )
             
-            # Parse the output
+            # Files that differ (sizes/hashes differ)
+            result_diff = subprocess.run(
+                ["rclone", "check", source_path, destination_path],
+                capture_output=True, text=True
+            )
+
+            # Parse stderr (rclone outputs check results to stderr)
             only_in_source = []
             only_in_dest = []
             differ = []
-            
-            for line in result.stdout.strip().split("\n"):
+
+            # Parse files only in source
+            for line in result_src.stderr.strip().split("\n"):
                 if not line.strip():
                     continue
-                if line.startswith("Only in "):
-                    parts = line.split(":", 1)
-                    if len(parts) > 1:
+                # Format: ERROR : <path>: file not in one directory
+                if "file not in one directory" in line or "file not in Remote" in line:
+                    parts = line.split(":", 2)
+                    if len(parts) >= 3:
                         path = parts[1].strip()
-                        if "src=" in line:
-                            only_in_source.append(path)
-                        elif "dst=" in line:
-                            only_in_dest.append(path)
-                elif line.startswith("The files differ:"):
-                    pass
-                elif line.strip() and not line.startswith("Only in") and not line.startswith("The files"):
-                    differ.append(line.strip())
-            
+                        only_in_source.append(path)
+
+            # Parse files only in dest
+            for line in result_dst.stderr.strip().split("\n"):
+                if not line.strip():
+                    continue
+                if "file not in one directory" in line or "file not in Local" in line:
+                    parts = line.split(":", 2)
+                    if len(parts) >= 3:
+                        path = parts[1].strip()
+                        only_in_dest.append(path)
+
+            # Parse files that differ
+            for line in result_diff.stderr.strip().split("\n"):
+                if not line.strip():
+                    continue
+                if "Sizes differ" in line or "Hashes differ" in line:
+                    parts = line.split(":", 2)
+                    if len(parts) >= 3:
+                        path = parts[1].strip()
+                        differ.append(path)
+
             if only_in_source or only_in_dest or differ:
                 if only_in_source:
                     console.print(f"\n[green]+ {len(only_in_source)} files only in SOURCE (will be COPIED):[/green]")
@@ -534,25 +585,25 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
                         console.print(f"  [green]+ {f}[/green]")
                     if len(only_in_source) > 10:
                         console.print(f"  [dim]... and {len(only_in_source) - 10} more[/dim]")
-                
+
                 if only_in_dest:
                     console.print(f"\n[red]- {len(only_in_dest)} files only in DESTINATION (will be DELETED):[/red]")
                     for f in only_in_dest[:10]:
                         console.print(f"  [red]- {f}[/red]")
                     if len(only_in_dest) > 10:
                         console.print(f"  [dim]... and {len(only_in_dest) - 10} more[/dim]")
-                
+
                 if differ:
                     console.print(f"\n[yellow]~ {len(differ)} files differ (will be OVERWRITTEN):[/yellow]")
                     for f in differ[:10]:
                         console.print(f"  [yellow]~ {f}[/yellow]")
                     if len(differ) > 10:
                         console.print(f"  [dim]... and {len(differ) - 10} more[/dim]")
-                
+
                 console.print()
             else:
                 console.print("[green]✓ No differences found. Files are identical.[/green]\n")
-                
+
         except Exception as e:
             console.print(f"[yellow]⚠️  Preview failed: {e}[/yellow]\n")
 
@@ -606,6 +657,7 @@ def generate_default_config():
         "DEFAULT_PORT": "8080",
         "USERNAME": "your_username",
         "PASSWORD": "your_secret_password",
+        "INCLUDE_HIDDEN": "false",
     }
 
     # Add rclone_flags section with examples
@@ -618,17 +670,11 @@ def generate_default_config():
     # Add filters section with default exclude patterns
     config["filters"] = {
         "exclude": "\n".join([
-            ".git/",
-            ".venv/",
+            "node_modules/",
             "__pycache__/",
             "*.pyc",
-            "*.pyo",
-            ".DS_Store",
-            "Thumbs.db",
             "*.tmp",
             "*.swp",
-            ".cache/",
-            "node_modules/",
         ])
     }
 
@@ -1043,17 +1089,11 @@ def manage_filters():
                 if "filters" not in config:
                     config["filters"] = {}
                 defaults = [
-                    ".git/",
-                    ".venv/",
+                    "node_modules/",
                     "__pycache__/",
                     "*.pyc",
-                    "*.pyo",
-                    ".DS_Store",
-                    "Thumbs.db",
                     "*.tmp",
                     "*.swp",
-                    ".cache/",
-                    "node_modules/",
                 ]
                 config["filters"]["exclude"] = "\n".join(defaults)
                 config["filters"]["include"] = ""

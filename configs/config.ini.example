@@ -15,6 +15,11 @@ DEFAULT_PORT = 8080
 USERNAME = your_username
 PASSWORD = your_secret_password
 
+; --- Hidden Files ---
+; Set to true to include hidden files and directories (files/folders starting with .)
+; Hidden files are excluded by default via automatic --exclude ".*" and --exclude ".*/" flags
+INCLUDE_HIDDEN = false
+
 ; -----------------------------------------------------------------------------
 ; rclone Flags
 ;
@@ -47,14 +52,8 @@ google photos =
 
 [filters]
 exclude =
-    .git/
-    .venv/
+    node_modules/
     __pycache__/
     *.pyc
-    *.pyo
-    .DS_Store
-    Thumbs.db
     *.tmp
     *.swp
-    .cache/
-    node_modules/

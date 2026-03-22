@@ -59,7 +59,7 @@ def _run_rclone_with_stats(
     """
     # Add rc flags to command
     command = command + ["--rc", f"--rc-addr=127.0.0.1:{rc_port}"]
-    
+
     proc = subprocess.Popen(
         command,
         stdout=subprocess.DEVNULL,
@@ -67,7 +67,12 @@ def _run_rclone_with_stats(
         stdin=subprocess.PIPE if stdin_data else None,
         text=True,
     )
-    
+
+    # Write stdin_data immediately before polling loop
+    if stdin_data:
+        proc.stdin.write(stdin_data)
+        proc.stdin.close()
+
     errors = []
     with console.status("") as status:
         while proc.poll() is None:
@@ -79,7 +84,7 @@ def _run_rclone_with_stats(
                 speed = stats.get("speed", 0)
                 transfers = stats.get("transfers", 0)
                 total_transfers = stats.get("totalTransfers", 0)
-                
+
                 # Format bytes for display
                 if total_bytes > 0:
                     mb_transferred = transferred / 1024 / 1024
@@ -88,9 +93,9 @@ def _run_rclone_with_stats(
                 else:
                     mb_transferred = transferred / 1024 / 1024
                     size_str = f"{mb_transferred:.1f} MB"
-                
+
                 speed_mb = speed / 1024 / 1024
-                
+
                 # Build status line
                 if total_transfers > 0:
                     status.update(
@@ -103,10 +108,13 @@ def _run_rclone_with_stats(
                     )
             else:
                 status.update(f"[dim]{label} running...[/dim]")
-    
-    _, stderr = proc.communicate(input=stdin_data)
+
+    _, stderr = proc.communicate()
     if stderr:
         errors = [line for line in stderr.strip().splitlines() if "ERROR" in line]
+        # If process failed but no ERROR lines found, capture last 5 lines of stderr
+        if not errors and proc.returncode != 0:
+            errors = stderr.strip().splitlines()[-5:]
     
     return proc.returncode, errors
 

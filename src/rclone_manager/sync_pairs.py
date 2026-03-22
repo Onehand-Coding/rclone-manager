@@ -110,6 +110,10 @@ def _build_command(pair: dict) -> list:
         # Note: bisync has its own filter handling
         cmd.extend(build_filter_args(merged_filters))
         return cmd
+    elif mode == "move_to_remote":
+        cmd = ["rclone", "move", local, remote]
+    elif mode == "move_to_local":
+        cmd = ["rclone", "move", remote, local]
     else:
         return []
 
@@ -277,6 +281,10 @@ def sync_pairs_run():
             continue
 
         command = _build_command(pair)
+        if not command:
+            console.print(f"[red]❌ Unknown mode '{pair['mode']}' for pair {pair['name']}. Skipping.[/red]")
+            continue
+
         console.print(f"\n[dim]Command: {' '.join(command)}[/dim]")
 
         label = MODES[pair['mode']]['label']
