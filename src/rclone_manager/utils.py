@@ -174,40 +174,61 @@ def get_rclone_flags(remote_type: str) -> List[str]:
 
 
 def choose_from_list(
-    items: List[str], message: str, item_type: str = "items"
+    items: List[str], message: str, item_type: str = "items", allow_quit: bool = True
 ) -> Union[List[str], str]:
     """
     Prompts the user to choose one or more items from a list.
     Returns a single item if one is chosen, otherwise a list.
+    
+    Args:
+        items: List of items to choose from
+        message: Prompt message to display
+        item_type: Description of items for error messages
+        allow_quit: If True, allows user to type 'q' or 'quit' to exit (returns None)
+    
+    Returns:
+        Selected item(s) or None if user quits or no items available
     """
     if not items:
         console.print(f"[bold red]No {item_type} found in this directory.[/bold red]")
         return None
 
-    for i, item in enumerate(items):
-        # Display directories with a trailing slash
-        display_item = f"{item}/" if item.endswith("/") else item
-        console.print(f"{i + 1}. {display_item}")
+    while True:
+        for i, item in enumerate(items):
+            # Display directories with a trailing slash
+            display_item = f"{item}/" if item.endswith("/") else item
+            console.print(f"{i + 1}. {display_item}")
 
-    choices_str = Prompt.ask(f"[yellow]{message}[/yellow]")
-    if not choices_str:
-        return None
-    if any(not i.strip().isdigit() for i in choices_str.split(",")):
-        console.print("[bold red]Invalid choice.[/bold red]")
-        return None
+        choices_str = Prompt.ask(f"[yellow]{message}[/yellow]")
+        
+        # Allow user to quit
+        if allow_quit and choices_str and choices_str.lower() in ['q', 'quit']:
+            console.print("[dim]Cancelled.[/dim]")
+            return None
+        
+        if not choices_str:
+            console.print("[bold red]Please enter a number or 'q' to quit.[/bold red]")
+            continue
+            
+        if any(not i.strip().isdigit() for i in choices_str.split(",")):
+            console.print("[bold red]Invalid choice. Please enter numbers only (e.g., 1 or 1,2).[/bold red]")
+            continue
 
-    selected_indices = [int(i.strip()) - 1 for i in choices_str.split(",")]
-    if any(i < 0 or i >= len(items) for i in selected_indices):
-        console.print("[bold red]Invalid choice.[/bold red]")
-        return None
-    selected_items = [items[i] for i in selected_indices]
+        selected_indices = [int(i.strip()) - 1 for i in choices_str.split(",")]
+        if any(i < 0 or i >= len(items) for i in selected_indices):
+            console.print(f"[bold red]Invalid choice. Please enter numbers between 1 and {len(items)}.[/bold red]")
+            continue
+            
+        selected_items = [items[i] for i in selected_indices]
+        return selected_items[0] if len(selected_items) == 1 else selected_items
 
-    return selected_items[0] if len(selected_items) == 1 else selected_items
 
-
-def navigate_local_file_system() -> Union[List[str], str]:
+def navigate_local_file_system(purpose: str = None) -> Union[List[str], str]:
     """
     Allows the user to navigate the local file system and select files or a directory.
+    
+    Args:
+        purpose: Optional description of what is being selected (e.g., "local folder", "source directory")
     """
     current_dir = os.path.expanduser("~")
     while True:
@@ -230,9 +251,17 @@ def navigate_local_file_system() -> Union[List[str], str]:
                 else:
                     console.print(f"{i + 1}. 📄 {item}")
 
-            prompt = "[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this directory.[/yellow]"
+            # Build contextual prompt
+            if purpose:
+                prompt = f"[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this {purpose}, 'q' to quit.[/yellow]"
+            else:
+                prompt = "[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this directory, 'q' to quit.[/yellow]"
             choice = Prompt.ask(prompt)
 
+            if choice and choice.lower() in ['q', 'quit']:
+                console.print("[dim]Cancelled.[/dim]")
+                return None
+                
             if choice == "..":
                 current_dir = os.path.dirname(current_dir)
                 continue
@@ -258,9 +287,13 @@ def navigate_local_file_system() -> Union[List[str], str]:
             current_dir = os.path.expanduser("~")
 
 
-def navigate_remote_file_system(remote: str) -> Union[List[str], str]:
+def navigate_remote_file_system(remote: str, purpose: str = None) -> Union[List[str], str]:
     """
     Allows the user to navigate a remote file system and select one or more files/directories.
+    
+    Args:
+        remote: The remote name to navigate
+        purpose: Optional description of what is being selected (e.g., "destination path", "source files")
     """
     current_path = f"{remote}:"
     while True:
@@ -284,8 +317,16 @@ def navigate_remote_file_system(remote: str) -> Union[List[str], str]:
                 else:
                     console.print(f"{i + 1}. 📄 {item}")
 
-            prompt = "[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this path.[/yellow]"
+            # Build contextual prompt
+            if purpose:
+                prompt = f"[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this {purpose}, 'q' to quit.[/yellow]"
+            else:
+                prompt = "[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this path, 'q' to quit.[/yellow]"
             choice = Prompt.ask(prompt)
+
+            if choice and choice.lower() in ['q', 'quit']:
+                console.print("[dim]Cancelled.[/dim]")
+                return None
 
             if choice.lower() in [".", "d"]:
                 return current_path

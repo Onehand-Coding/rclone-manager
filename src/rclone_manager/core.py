@@ -32,6 +32,8 @@ def serve_remote():
         console.print("[bold red]No rclone remotes found.[/bold red]")
         return
 
+    # Step 1: Select Remote(s)
+    console.print("\n[bold cyan]-- Step 1: Select Remote(s) to Serve --[/bold cyan]")
     selected_remotes = choose_from_list(
         remotes, "Select one or more remotes to serve (e.g., 1 or 1,2):"
     )
@@ -40,6 +42,8 @@ def serve_remote():
     if not isinstance(selected_remotes, list):
         selected_remotes = [selected_remotes]
 
+    # Step 2: Select Backend
+    console.print("\n[bold cyan]-- Step 2: Select Backend --[/bold cyan]")
     backend = choose_from_list(["http", "webdav", "ftp"], "Select the backend to use:")
     if not backend:
         return
@@ -158,10 +162,14 @@ def serve_local():
     """
     Serves a local directory using rclone.
     """
-    local_path = navigate_local_file_system()
+    # Step 1: Select Local Directory
+    console.print("\n[bold cyan]-- Step 1: Select Local Directory --[/bold cyan]")
+    local_path = navigate_local_file_system(purpose="directory")
     if not local_path:
         return
 
+    # Step 2: Select Backend
+    console.print("\n[bold cyan]-- Step 2: Select Backend --[/bold cyan]")
     backends = choose_from_list(["http", "webdav", "ftp"], "Select the backend to use:")
     if not backends:
         return
@@ -205,7 +213,7 @@ def upload_backup(overwrite: bool = False):
     console.print(
         "\n[bold cyan]-- Step 1: Select Local Files/Folder to Upload --[/bold cyan]"
     )
-    local_selection = navigate_local_file_system()
+    local_selection = navigate_local_file_system(purpose="file or folder")
     if not local_selection:
         return
 
@@ -220,7 +228,7 @@ def upload_backup(overwrite: bool = False):
     console.print(
         "\n[bold cyan]-- Step 3: Select Remote Destination Folder --[/bold cyan]"
     )
-    remote_dir = navigate_remote_file_system(remote)
+    remote_dir = navigate_remote_file_system(remote, purpose="destination folder")
     # Ensure the remote path is treated as a directory
     if not remote_dir.endswith("/"):
         remote_dir = remote_dir.strip("/") + "/"
@@ -307,14 +315,14 @@ def download_backup(overwrite: bool = False):
     console.print(
         "\n[bold cyan]-- Step 2: Select Remote Files/Folders to Download --[/bold cyan]"
     )
-    remote_selection = navigate_remote_file_system(remote)
+    remote_selection = navigate_remote_file_system(remote, purpose="files/folders to download")
     if not remote_selection:
         return
 
     console.print(
         "\n[bold cyan]-- Step 3: Select Local Destination Folder --[/bold cyan]"
     )
-    local_dir = navigate_local_file_system()
+    local_dir = navigate_local_file_system(purpose="destination folder")
     if not local_dir or os.path.isfile(local_dir):
         console.print("[red]Invalid destination. You must select a directory.[/red]")
         return
@@ -501,7 +509,7 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
     if not source_remote:
         return
 
-    source_path = navigate_remote_file_system(source_remote)
+    source_path = navigate_remote_file_system(source_remote, purpose="source path")
     if not source_path:
         return
 
@@ -509,7 +517,7 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
     if not destination_remote:
         return
 
-    destination_path = navigate_remote_file_system(destination_remote)
+    destination_path = navigate_remote_file_system(destination_remote, purpose="destination path")
     if not destination_path:
         return
 
@@ -693,7 +701,7 @@ def check_remote(overwrite: bool = False):
     console.rule("[bold]🔍 Checksum Verify[/bold]")
 
     console.print("\n[bold cyan]-- Step 1: Select Local Directory --[/bold cyan]")
-    local_path = navigate_local_file_system()
+    local_path = navigate_local_file_system(purpose="directory")
     if not local_path:
         return
 
@@ -706,7 +714,7 @@ def check_remote(overwrite: bool = False):
         return
 
     console.print("\n[bold cyan]-- Step 3: Select Remote Path --[/bold cyan]")
-    remote_path = navigate_remote_file_system(remote)
+    remote_path = navigate_remote_file_system(remote, purpose="remote path")
     if not remote_path:
         return
 
@@ -734,6 +742,8 @@ def ls_remote():
         console.print("[bold red]No rclone remotes found.[/bold red]")
         return
 
+    # Step 1: Select Remote to Browse
+    console.print("\n[bold cyan]-- Step 1: Select Remote to Browse --[/bold cyan]")
     remote = choose_from_list(remotes, "Select remote to browse:")
     if not remote:
         return
@@ -775,7 +785,7 @@ def ls_remote():
                 "\n[yellow]Number to enter folder, '..' to go up, 'q' to quit[/yellow]"
             )
 
-            if choice.lower() == "q":
+            if choice and choice.lower() == "q":
                 break
             elif choice == "..":
                 if current_path.rstrip("/") == f"{remote}:":
@@ -783,15 +793,16 @@ def ls_remote():
                 current_path = os.path.dirname(current_path.rstrip("/"))
                 if not current_path.endswith(":"):
                     current_path += "/"
-            else:
-                idx = int(choice.strip()) - 1
-                if 0 <= idx < len(dirs):
-                    current_path = current_path.rstrip("/") + "/" + dirs[idx]["Name"] + "/"
-                else:
-                    console.print("[dim]That's a file, not a folder.[/dim]")
-
-        except (ValueError, IndexError):
-            console.print("[bold red]Invalid choice.[/bold red]")
+            elif choice:
+                try:
+                    idx = int(choice.strip()) - 1
+                    if 0 <= idx < len(dirs):
+                        current_path = current_path.rstrip("/") + "/" + dirs[idx]["Name"] + "/"
+                    else:
+                        console.print("[bold red]Invalid choice. That's a file, not a folder.[/bold red]")
+                except ValueError:
+                    console.print("[bold red]Invalid choice. Please enter a number, '..', or 'q'.[/bold red]")
+                    continue
         except subprocess.CalledProcessError as e:
             console.print(f"[bold red]Error listing path: {e}[/bold red]")
             current_path = f"{remote}:"
@@ -808,15 +819,20 @@ def dedupe_remote():
         console.print("[bold red]No rclone remotes found.[/bold red]")
         return
 
+    # Step 1: Select Remote
+    console.print("\n[bold cyan]-- Step 1: Select Remote --[/bold cyan]")
     remote = choose_from_list(remotes, "Select remote to dedupe:")
     if not remote:
         return
 
-    console.print("\n[bold cyan]-- Select Remote Path --[/bold cyan]")
-    remote_path = navigate_remote_file_system(remote)
+    # Step 2: Select Remote Path
+    console.print("\n[bold cyan]-- Step 2: Select Remote Path --[/bold cyan]")
+    remote_path = navigate_remote_file_system(remote, purpose="remote path")
     if not remote_path:
         return
 
+    # Step 3: Select Dedupe Mode
+    console.print("\n[bold cyan]-- Step 3: Select Dedupe Mode --[/bold cyan]")
     mode = choose_from_list(
         ["interactive", "first", "newest", "oldest", "largest", "smallest", "rename"],
         "Select dedupe mode:",
@@ -854,6 +870,8 @@ def space_remote():
         console.print("[bold red]No rclone remotes found.[/bold red]")
         return
 
+    # Step 1: Select Remote(s) to Check
+    console.print("\n[bold cyan]-- Step 1: Select Remote(s) to Check --[/bold cyan]")
     selected = choose_from_list(
         remotes, "Select remote(s) to check (e.g., 1 or 1,2 or 'all'):"
     )
@@ -896,7 +914,7 @@ def copy_between():
         return
 
     console.print("\n[bold cyan]-- Step 2: Select Source Path --[/bold cyan]")
-    source_path = navigate_remote_file_system(source_remote)
+    source_path = navigate_remote_file_system(source_remote, purpose="source path")
     if not source_path:
         return
 
@@ -906,7 +924,7 @@ def copy_between():
         return
 
     console.print("\n[bold cyan]-- Step 4: Select Destination Path --[/bold cyan]")
-    dest_path = navigate_remote_file_system(dest_remote)
+    dest_path = navigate_remote_file_system(dest_remote, purpose="destination path")
     if not dest_path:
         return
 
@@ -939,7 +957,7 @@ def bisync_remotes():
     remote1 = choose_from_list(remotes, "Select first remote:")
     if not remote1:
         return
-    path1 = navigate_remote_file_system(remote1)
+    path1 = navigate_remote_file_system(remote1, purpose="first remote path")
     if not path1:
         return
 
@@ -947,7 +965,7 @@ def bisync_remotes():
     remote2 = choose_from_list(remotes, "Select second remote:")
     if not remote2:
         return
-    path2 = navigate_remote_file_system(remote2)
+    path2 = navigate_remote_file_system(remote2, purpose="second remote path")
     if not path2:
         return
 

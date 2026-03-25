@@ -174,6 +174,8 @@ def mount_remote():
         console.print("[bold red]No rclone remotes found.[/bold red]")
         return
 
+    # Step 1: Select Remote(s) to Mount
+    console.print("\n[bold cyan]-- Step 1: Select Remote(s) to Mount --[/bold cyan]")
     selected = choose_from_list(remotes, "Select remote(s) to mount:")
     if not selected:
         return
