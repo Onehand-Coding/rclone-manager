@@ -1590,6 +1590,10 @@ dependencies = [
     { name = "python-dotenv", version = "1.1.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
     { name = "rich", version = "13.9.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "rich", version = "14.0.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.9'" },
+]
+
+[package.optional-dependencies]
+gui = [
     { name = "streamlit", version = "1.40.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.9'" },
     { name = "streamlit", version = "1.50.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version == '3.9.*'" },
     { name = "streamlit", version = "1.51.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.10'" },
@@ -1602,8 +1606,9 @@ requires-dist = [
     { name = "pygments" },
     { name = "python-dotenv" },
     { name = "rich" },
-    { name = "streamlit" },
+    { name = "streamlit", marker = "extra == 'gui'" },
 ]
+provides-extras = ["gui"]
 
 [[package]]
 name = "referencing"

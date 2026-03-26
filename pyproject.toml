@@ -15,8 +15,11 @@ dependencies = [
     "markdown-it-py",
     "mdurl",
     "pygments",
-    "streamlit",
+    #"streamlit",
 ]
+[project.optional-dependencies]
+gui = ["streamlit"]
+
 
 [project.scripts]
 rclone-manager = "rclone_manager.cli:main"
