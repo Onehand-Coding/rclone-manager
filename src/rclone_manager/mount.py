@@ -176,7 +176,7 @@ def mount_remote():
 
     # Step 1: Select Remote(s) to Mount
     console.print("\n[bold cyan]-- Step 1: Select Remote(s) to Mount --[/bold cyan]")
-    selected = choose_from_list(remotes, "Select remote(s) to mount:")
+    selected = choose_from_list(remotes, "Select remote(s) to mount:", multi=True)
     if not selected:
         return
     if not isinstance(selected, list):
@@ -293,7 +293,7 @@ def unmount_remote():
         return
 
     options = ["All"] + active
-    selected = choose_from_list(options, "Select mount(s) to unmount:")
+    selected = choose_from_list(options, "Select mount(s) to unmount:", multi=True)
     if not selected:
         return
 

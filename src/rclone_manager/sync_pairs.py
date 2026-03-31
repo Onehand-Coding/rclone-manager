@@ -89,9 +89,11 @@ MODES = {
 
 # ── storage ───────────────────────────────────────────────────────────────────
 
+
 def _config_path() -> str:
     """Get the path to sync-pairs.json in the project's configs directory."""
     from .config import PROJECT_ROOT
+
     return os.path.join(PROJECT_ROOT, "configs", "sync-pairs.json")
 
 
@@ -109,6 +111,7 @@ def _save_pairs(pairs: list):
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────
+
 
 def _build_command(pair: dict) -> list:
     """Build rclone command for a sync pair with filters applied."""
@@ -182,27 +185,34 @@ def _build_command(pair: dict) -> list:
 
 def _confirm_run(pair: dict) -> bool:
     mode_info = MODES[pair["mode"]]
-    tag = "[bold red]DESTRUCTIVE[/bold red]" if mode_info["destructive"] else "[green]SAFE[/green]"
-    
+    tag = (
+        "[bold red]DESTRUCTIVE[/bold red]"
+        if mode_info["destructive"]
+        else "[green]SAFE[/green]"
+    )
+
     # Determine pair type (default to local_to_remote for backward compatibility)
     pair_type = pair.get("type", "local_to_remote")
-    
+
     console.print(f"\n[bold]Sync Pair:[/bold] {pair['name']}")
-    console.print(f"  Type   : {'[cyan]Remote→Remote[/cyan]' if pair_type == 'remote_to_remote' else '[magenta]Local→Remote[/magenta]'}")
+    console.print(
+        f"  Type   : {'[cyan]Remote→Remote[/cyan]' if pair_type == 'remote_to_remote' else '[magenta]Local→Remote[/magenta]'}"
+    )
     console.print(f"  Mode   : {mode_info['label']} ({tag})")
     console.print(f"  Action : {mode_info['description']}")
-    
+
     if pair_type == "remote_to_remote":
         console.print(f"  Source      : {pair.get('source', '')}")
         console.print(f"  Destination : {pair.get('destination', '')}")
     else:
         console.print(f"  Local  : {pair.get('local', '')}")
         console.print(f"  Remote : {pair.get('remote', '')}")
-    
+
     return Confirm.ask("\nProceed?", default=False)
 
 
 # ── public commands ───────────────────────────────────────────────────────────
+
 
 def sync_pairs_add():
     """Interactively add a new sync pair."""
@@ -224,7 +234,11 @@ def sync_pairs_add():
     console.print("\n[bold cyan]-- Step 2: Select Pair Type --[/bold cyan]")
     pair_types = [
         ("local_to_remote", "Local → Remote", "Sync local folder with remote storage"),
-        ("remote_to_remote", "Remote → Remote", "Sync between two remote storages (server-side when possible)"),
+        (
+            "remote_to_remote",
+            "Remote → Remote",
+            "Sync between two remote storages (server-side when possible)",
+        ),
     ]
     type_labels = [f"{label} — {desc}" for _, label, desc in pair_types]
     selected_type_label = choose_from_list(type_labels, "Select pair type:")
@@ -261,7 +275,9 @@ def sync_pairs_add():
         remote_path = remote_path.rstrip("/")
 
         # Filter modes for local_to_remote
-        available_modes = [(k, v) for k, v in MODES.items() if v.get("type") == "local_to_remote"]
+        available_modes = [
+            (k, v) for k, v in MODES.items() if v.get("type") == "local_to_remote"
+        ]
 
     else:  # remote_to_remote
         console.print("\n[bold cyan]-- Step 3: Select Source Remote --[/bold cyan]")
@@ -281,7 +297,9 @@ def sync_pairs_add():
             return
         source_path = source_path.rstrip("/")
 
-        console.print("\n[bold cyan]-- Step 5: Select Destination Remote --[/bold cyan]")
+        console.print(
+            "\n[bold cyan]-- Step 5: Select Destination Remote --[/bold cyan]"
+        )
         dest_remote = choose_from_list(remotes, "Select destination remote:")
         if not dest_remote or isinstance(dest_remote, list):
             return
@@ -296,12 +314,18 @@ def sync_pairs_add():
         dest_path = dest_path.rstrip("/")
 
         # Filter modes for remote_to_remote
-        available_modes = [(k, v) for k, v in MODES.items() if v.get("type") == "remote_to_remote"]
+        available_modes = [
+            (k, v) for k, v in MODES.items() if v.get("type") == "remote_to_remote"
+        ]
         local = None
         remote_path = None
 
     # Step N: Select Mode
-    console.print("\n[bold cyan]-- Step {}: Select Sync Mode --[/bold cyan]".format(6 if pair_type == "local_to_remote" else 7))
+    console.print(
+        "\n[bold cyan]-- Step {}: Select Sync Mode --[/bold cyan]".format(
+            6 if pair_type == "local_to_remote" else 7
+        )
+    )
     mode_labels = [f"{v['label']} — {v['description']}" for k, v in available_modes]
     mode_keys = [k for k, v in available_modes]
     selected_mode_label = choose_from_list(mode_labels, "Select sync mode:")
@@ -310,7 +334,9 @@ def sync_pairs_add():
     mode = mode_keys[mode_labels.index(selected_mode_label)]
 
     # Optional: Add pair-specific filters
-    console.print("\n[dim]Add pair-specific exclude patterns? (comma-separated, or skip)[/dim]")
+    console.print(
+        "\n[dim]Add pair-specific exclude patterns? (comma-separated, or skip)[/dim]"
+    )
     console.print("[dim]Examples: *.log, temp/, drafts/[/dim]")
     exclude_input = Prompt.ask("Exclude patterns", default="")
 
@@ -320,7 +346,9 @@ def sync_pairs_add():
         if patterns:
             pair_filters["exclude"] = patterns
 
-    console.print("\n[dim]Add pair-specific include patterns? (comma-separated, or skip)[/dim]")
+    console.print(
+        "\n[dim]Add pair-specific include patterns? (comma-separated, or skip)[/dim]"
+    )
     console.print("[dim]Examples: important/*, projects/*.pdf[/dim]")
     include_input = Prompt.ask("Include patterns", default="")
 
@@ -356,7 +384,9 @@ def sync_pairs_list():
     """Display all configured sync pairs."""
     pairs = _load_pairs()
     if not pairs:
-        console.print("[yellow]No sync pairs configured. Use 'rman sync-pairs add'.[/yellow]")
+        console.print(
+            "[yellow]No sync pairs configured. Use 'rman sync-pairs add'.[/yellow]"
+        )
         return
 
     table = Table(title="Sync Pairs", show_lines=True)
@@ -372,12 +402,14 @@ def sync_pairs_list():
     for i, p in enumerate(pairs, 1):
         # Determine pair type (default to local_to_remote for backward compatibility)
         pair_type = p.get("type", "local_to_remote")
-        
+
         mode_info = MODES.get(p["mode"], {})
         label = mode_info.get("label", p["mode"])
         destructive = mode_info.get("destructive", False)
-        mode_display = f"[red]{label}[/red]" if destructive else f"[green]{label}[/green]"
-        
+        mode_display = (
+            f"[red]{label}[/red]" if destructive else f"[green]{label}[/green]"
+        )
+
         # Get paths based on pair type
         if pair_type == "remote_to_remote":
             type_display = "[cyan]Remote→Remote[/cyan]"
@@ -396,7 +428,16 @@ def sync_pairs_list():
         if filters.get("include"):
             filter_str += f"[cyan]Include: {', '.join(filters['include'])}[/cyan]"
 
-        table.add_row(str(i), p["name"], type_display, mode_display, source, "→", destination, filter_str)
+        table.add_row(
+            str(i),
+            p["name"],
+            type_display,
+            mode_display,
+            source,
+            "→",
+            destination,
+            filter_str,
+        )
 
     console.print(table)
 
@@ -405,11 +446,13 @@ def sync_pairs_run():
     """Run one or all sync pairs."""
     pairs = _load_pairs()
     if not pairs:
-        console.print("[yellow]No sync pairs configured. Use 'rman sync-pairs add'.[/yellow]")
+        console.print(
+            "[yellow]No sync pairs configured. Use 'rman sync-pairs add'.[/yellow]"
+        )
         return
 
     options = ["All"] + [p["name"] for p in pairs]
-    selected = choose_from_list(options, "Select pair(s) to run:")
+    selected = choose_from_list(options, "Select pair(s) to run:", multi=True)
     if not selected:
         return
 
@@ -427,18 +470,22 @@ def sync_pairs_run():
 
         command = _build_command(pair)
         if not command:
-            console.print(f"[red]❌ Unknown mode '{pair['mode']}' for pair {pair['name']}. Skipping.[/red]")
+            console.print(
+                f"[red]❌ Unknown mode '{pair['mode']}' for pair {pair['name']}. Skipping.[/red]"
+            )
             continue
 
         console.print(f"\n[dim]Command: {' '.join(command)}[/dim]")
 
-        label = MODES[pair['mode']]['label']
+        label = MODES[pair["mode"]]["label"]
         returncode, errors = _run_rclone_with_stats(label, command)
 
         if returncode == 0:
             console.print(f"[green]✅ {pair['name']} completed.[/green]")
             # Update bisync_resync_done flag for bisync modes
-            if pair["mode"] in ["two_way", "remote_bisync"] and not pair.get("bisync_resync_done"):
+            if pair["mode"] in ["two_way", "remote_bisync"] and not pair.get(
+                "bisync_resync_done"
+            ):
                 all_pairs = _load_pairs()
                 for p in all_pairs:
                     if p["name"] == pair["name"]:

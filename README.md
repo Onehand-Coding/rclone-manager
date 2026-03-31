@@ -25,6 +25,7 @@ A powerful Python CLI tool that simplifies rclone operations with an intuitive i
 - Python 3.8+
 - [rclone](https://rclone.org/downloads/) installed and configured
 - [uv](https://docs.astral.sh/uv/) package manager (recommended)
+- [fzf](https://github.com/junegunn/fzf) (optional, recommended for fuzzy search)
 
 ## Installation
 
@@ -256,11 +257,22 @@ Interactively manage global exclude/include patterns.
 
 ## Navigation Guide
 
-### File Selection Syntax
+### Fuzzy Search (fzf)
+
+When fzf is installed and `USE_FZF = true` in config.ini, all selection interfaces use fuzzy search:
+
+- **Type to filter**: Start typing to narrow down items instantly
+- **Multi-select**: Press `Tab` or `Shift+Tab` to select multiple items
+- **Navigate**: Use arrow keys or `Ctrl+j`/`Ctrl+k`
+- **Confirm**: Press `Enter` to confirm selection
+- **Cancel**: Press `Esc` or `Ctrl+c` to cancel
+
+### Legacy Numbered List (fallback)
+
+If fzf is not installed or `USE_FZF = false`, the classic numbered-list interface is used:
 
 - **Single item**: `1` (select item 1)
 - **Multiple items**: `1,2,3` (select items 1, 2, and 3)
-- **Range**: `1-5` (select items 1 through 5)
 - **Go up**: `..` (navigate to parent directory)
 - **Select current**: `.` or `d` (select current directory/path)
 
