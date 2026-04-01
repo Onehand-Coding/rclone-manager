@@ -796,7 +796,7 @@ def ls_remote():
         try:
             with console.status(f"[dim]Listing {current_path}...[/dim]"):
                 output = subprocess.check_output(
-                    ["rclone", "lsjson", current_path], stderr=subprocess.DEVNULL
+                    ["rclone", "lsjson", current_path], stderr=subprocess.PIPE
                 ).decode("utf-8")
 
             items = json.loads(output)
@@ -891,8 +891,15 @@ def ls_remote():
                         )
                         continue
         except subprocess.CalledProcessError as e:
-            console.print(f"[bold red]Error listing path: {e}[/bold red]")
-            current_path = f"{remote}:"
+            stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else ""
+            if "invalid_grant" in stderr or "token" in stderr.lower():
+                console.print(
+                    f"[bold red]Authentication error for [cyan]{remote}[/cyan]. Token may be expired.[/bold red]"
+                )
+                console.print(f"[dim]Run: rclone config reconnect {remote}[/dim]")
+            else:
+                console.print(f"[bold red]Error listing path: {e}[/bold red]")
+            break
 
 
 def dedupe_remote():
