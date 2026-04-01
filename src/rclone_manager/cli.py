@@ -6,7 +6,13 @@ from .config import setup_env
 from .config import PROJECT_ROOT
 from .mount import mount_remote, unmount_remote
 from .webui_launcher import main as webui_main
-from .sync_pairs import sync_pairs, sync_pairs_add, sync_pairs_list, sync_pairs_run, sync_pairs_remove
+from .sync_pairs import (
+    sync_pairs,
+    sync_pairs_add,
+    sync_pairs_list,
+    sync_pairs_run,
+    sync_pairs_remove,
+)
 from .status import show_status
 from .core import (
     serve_remote,
@@ -37,19 +43,13 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     # Generate config command
-    subparsers.add_parser(
-        "generate-config", help="Generate a default config.ini file"
-    )
+    subparsers.add_parser("generate-config", help="Generate a default config.ini file")
 
     # Serve remote command
-    subparsers.add_parser(
-        "serve-remote", help="Serve a remote destination"
-    )
+    subparsers.add_parser("serve-remote", help="Serve a remote destination")
 
     # Serve local command
-    subparsers.add_parser(
-        "serve-local", help="Serve a local directory"
-    )
+    subparsers.add_parser("serve-local", help="Serve a local directory")
 
     # Upload command
     upload_parser = subparsers.add_parser("upload", help="Upload a backup")
@@ -89,59 +89,49 @@ def main():
     )
 
     # Config command
-    subparsers.add_parser(
-        "config", help="Manage rclone flags in config.ini"
-    )
+    subparsers.add_parser("config", help="Manage rclone flags in config.ini")
 
     # Web UI command
-    subparsers.add_parser(
-        "web-ui", help="Launch web-based user interface"
-    )
+    subparsers.add_parser("web-ui", help="Launch web-based user interface")
 
     # Mounting
-    subparsers.add_parser(
-        "mount", help="Mount a remote as a local directory"
-    )
-    subparsers.add_parser(
-        "unmount", help="Unmount active rclone mounts"
-    )
+    subparsers.add_parser("mount", help="Mount a remote as a local directory")
+    subparsers.add_parser("unmount", help="Unmount active rclone mounts")
 
     # Additional Utils
     subparsers.add_parser("ls", help="Browse and list contents of a remote")
 
-    subparsers.add_parser(
-        "checksum", help="Verify integrity between local and remote"
-    )
+    subparsers.add_parser("checksum", help="Verify integrity between local and remote")
 
-    subparsers.add_parser(
-        "dedupe", help="Find and remove duplicate files on a remote"
-    )
+    subparsers.add_parser("dedupe", help="Find and remove duplicate files on a remote")
 
-    subparsers.add_parser(
-        "space", help="Show quota and storage usage for remotes"
-    )
+    subparsers.add_parser("space", help="Show quota and storage usage for remotes")
 
     subparsers.add_parser(
         "copy-between", help="Copy files directly between two remotes"
     )
 
-    subparsers.add_parser(
-        "bisync", help="Two-way sync between two remotes"
-    )
+    subparsers.add_parser("bisync", help="Two-way sync between two remotes")
 
     sync_pairs_parser = subparsers.add_parser(
         "sync-pairs", help="Manage and run sync pairs"
     )
     sync_pairs_parser.add_argument(
-        "action", nargs="?", choices=["add", "list", "run", "remove"],
-        help="Action to perform (optional, interactive if omitted)"
+        "action",
+        nargs="?",
+        choices=["add", "list", "run", "remove"],
+        help="Action to perform (optional, interactive if omitted)",
     )
-    subparsers.add_parser(
-        "status", help="Show active mounts and sync pairs"
-    )
+    subparsers.add_parser("status", help="Show active mounts and sync pairs")
 
-    subparsers.add_parser(
-        "filters", help="Manage global exclude/include filters"
+    subparsers.add_parser("filters", help="Manage global exclude/include filters")
+
+    fzf_parser = subparsers.add_parser("fzf", help="Toggle fuzzy search on/off")
+    fzf_parser.add_argument(
+        "action",
+        nargs="?",
+        choices=["on", "off", "status"],
+        help="Turn fzf on, off, or show current status",
     )
 
     args = parser.parse_args()
@@ -159,7 +149,9 @@ def main():
             manage_config()
         elif args.command == "sync":
             if args.dry_run and args.force:
-                console.print("[bold red]Error: --dry-run and --force cannot be used together.[/bold red]")
+                console.print(
+                    "[bold red]Error: --dry-run and --force cannot be used together.[/bold red]"
+                )
                 return
             sync_remotes(dry_run=args.dry_run, preview=args.preview, force=args.force)
         elif args.command == "generate-config":
@@ -198,6 +190,11 @@ def main():
             show_status()
         elif args.command == "filters":
             manage_filters()
+        elif args.command == "fzf":
+            from .utils import _fzf_available, _toggle_fzf
+
+            action = args.action or "status"
+            _toggle_fzf(action)
         else:
             parser.print_help()
     except KeyboardInterrupt:

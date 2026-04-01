@@ -20,6 +20,11 @@ PASSWORD = your_secret_password
 ; Hidden files are excluded by default via automatic --exclude ".*" and --exclude ".*/" flags
 INCLUDE_HIDDEN = false
 
+; --- Fuzzy Search ---
+; Set to true to use fzf for interactive selection (requires fzf installed)
+; Set to false to use the legacy numbered-list interface
+USE_FZF = true
+
 ; -----------------------------------------------------------------------------
 ; rclone Flags
 ;

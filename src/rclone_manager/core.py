@@ -35,7 +35,7 @@ def serve_remote():
     # Step 1: Select Remote(s)
     console.print("\n[bold cyan]-- Step 1: Select Remote(s) to Serve --[/bold cyan]")
     selected_remotes = choose_from_list(
-        remotes, "Select one or more remotes to serve (e.g., 1 or 1,2):"
+        remotes, "Select one or more remotes to serve (e.g., 1 or 1,2):", multi=True
     )
     if not selected_remotes:
         return
@@ -207,7 +207,7 @@ def upload_backup(overwrite: bool = False):
     Uploads files or a directory to a remote destination.
     """
     from .config import PROJECT_ROOT, get_filters, build_filter_args
-    
+
     console.rule("[bold]⬆️ Upload[/bold]")
 
     console.print(
@@ -234,7 +234,9 @@ def upload_backup(overwrite: bool = False):
         remote_dir = remote_dir.strip("/") + "/"
 
     # Optional: Add temporary exclude patterns for this upload
-    console.print("\n[dim]Add exclude patterns for this upload? (comma-separated, or skip)[/dim]")
+    console.print(
+        "\n[dim]Add exclude patterns for this upload? (comma-separated, or skip)[/dim]"
+    )
     console.print("[dim]Examples: *.log, temp/, __pycache__/[/dim]")
     exclude_input = Prompt.ask("Exclude patterns", default="")
     temp_filters = []
@@ -246,7 +248,9 @@ def upload_backup(overwrite: bool = False):
     # Build filter arguments: global filters + temporary upload filters
     global_filters = get_filters(PROJECT_ROOT)
     all_exclude = global_filters["exclude"] + temp_filters
-    filter_args = build_filter_args({"exclude": all_exclude, "include": global_filters["include"]})
+    filter_args = build_filter_args(
+        {"exclude": all_exclude, "include": global_filters["include"]}
+    )
 
     base_command = ["rclone", "copy"]
     if overwrite:
@@ -284,7 +288,9 @@ def upload_backup(overwrite: bool = False):
 
         label = f"Uploading {len(file_names)} files"
         stdin_data = "\n".join(file_names)
-        returncode, errors = _run_rclone_with_stats(label, command, stdin_data=stdin_data)
+        returncode, errors = _run_rclone_with_stats(
+            label, command, stdin_data=stdin_data
+        )
 
     if returncode == 0:
         console.rule("[bold green]✅ Upload Complete[/bold green]")
@@ -299,7 +305,7 @@ def download_backup(overwrite: bool = False):
     Downloads one or more files/directories from a remote destination.
     """
     from .config import PROJECT_ROOT, get_filters, build_filter_args
-    
+
     console.rule("[bold]⬇️ Download[/bold]")
 
     console.print(
@@ -315,7 +321,9 @@ def download_backup(overwrite: bool = False):
     console.print(
         "\n[bold cyan]-- Step 2: Select Remote Files/Folders to Download --[/bold cyan]"
     )
-    remote_selection = navigate_remote_file_system(remote, purpose="files/folders to download")
+    remote_selection = navigate_remote_file_system(
+        remote, purpose="files/folders to download"
+    )
     if not remote_selection:
         return
 
@@ -328,7 +336,9 @@ def download_backup(overwrite: bool = False):
         return
 
     # Optional: Add temporary exclude patterns for this download
-    console.print("\n[dim]Add exclude patterns for this download? (comma-separated, or skip)[/dim]")
+    console.print(
+        "\n[dim]Add exclude patterns for this download? (comma-separated, or skip)[/dim]"
+    )
     console.print("[dim]Examples: *.tmp, .cache/, Thumbs.db[/dim]")
     exclude_input = Prompt.ask("Exclude patterns", default="")
     temp_filters = []
@@ -340,13 +350,15 @@ def download_backup(overwrite: bool = False):
     # Build filter arguments: global filters + temporary download filters
     global_filters = get_filters(PROJECT_ROOT)
     all_exclude = global_filters["exclude"] + temp_filters
-    filter_args = build_filter_args({"exclude": all_exclude, "include": global_filters["include"]})
+    filter_args = build_filter_args(
+        {"exclude": all_exclude, "include": global_filters["include"]}
+    )
 
     base_command = ["rclone", "copy"]
     if overwrite:
         console.print("[yellow]Overwrite mode enabled (ignoring timestamps).[/yellow]")
         base_command.append("--ignore-times")
-    
+
     # Add filter arguments to command
     base_command.extend(filter_args)
 
@@ -394,7 +406,9 @@ def download_backup(overwrite: bool = False):
             ]
             label = f"Downloading {len(file_names_only)} items"
             stdin_data = "\n".join(file_names_only)
-            returncode, errors = _run_rclone_with_stats(label, command, stdin_data=stdin_data)
+            returncode, errors = _run_rclone_with_stats(
+                label, command, stdin_data=stdin_data
+            )
 
     if returncode == 0:
         console.rule("[bold green]✅ Download Complete[/bold green]")
@@ -425,9 +439,13 @@ def manage_config():
         console.print("1. View Current Flags")
         console.print("2. Add/Edit Flag for a Remote Type")
         console.print("3. Delete Flag from a Remote Type")
-        console.print("4. Toggle Hidden Files (currently: {})".format(
-            "included" if os.environ.get("INCLUDE_HIDDEN", "false").lower() == "true" else "excluded"
-        ))
+        console.print(
+            "4. Toggle Hidden Files (currently: {})".format(
+                "included"
+                if os.environ.get("INCLUDE_HIDDEN", "false").lower() == "true"
+                else "excluded"
+            )
+        )
         console.print("5. Exit")
         choice = Prompt.ask(
             "Enter your choice", choices=["1", "2", "3", "4", "5"], default="5"
@@ -485,7 +503,9 @@ def manage_config():
             config["DEFAULT"]["INCLUDE_HIDDEN"] = new_val
             os.environ["INCLUDE_HIDDEN"] = new_val
             save_changes()
-            console.print(f"[green]Hidden files are now {'included' if new_val == 'true' else 'excluded'}.[/green]")
+            console.print(
+                f"[green]Hidden files are now {'included' if new_val == 'true' else 'excluded'}.[/green]"
+            )
 
         elif choice == "5":
             break
@@ -494,7 +514,7 @@ def manage_config():
 def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = False):
     """
     Syncs between two rclone remotes.
-    
+
     Args:
         dry_run: Show what would change without making any changes
         preview: Run rclone check first to show diff, then confirm
@@ -517,7 +537,9 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
     if not destination_remote:
         return
 
-    destination_path = navigate_remote_file_system(destination_remote, purpose="destination path")
+    destination_path = navigate_remote_file_system(
+        destination_remote, purpose="destination path"
+    )
     if not destination_path:
         return
 
@@ -525,7 +547,9 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
     console.print("\n[yellow]⚠️  DESTRUCTIVE OPERATION[/yellow]")
     console.print(f"[yellow]Source:      {source_path}[/yellow]")
     console.print(f"[yellow]Destination: {destination_path}[/yellow]")
-    console.print("[yellow]Files on destination not in source will be DELETED permanently.[/yellow]\n")
+    console.print(
+        "[yellow]Files on destination not in source will be DELETED permanently.[/yellow]\n"
+    )
 
     # If --preview, run rclone check first
     if preview:
@@ -535,19 +559,22 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
             # Files only in source (missing on dst)
             result_src = subprocess.run(
                 ["rclone", "check", source_path, destination_path, "--missing-on-dst"],
-                capture_output=True, text=True
+                capture_output=True,
+                text=True,
             )
 
             # Files only in dest (missing on src)
             result_dst = subprocess.run(
                 ["rclone", "check", source_path, destination_path, "--missing-on-src"],
-                capture_output=True, text=True
+                capture_output=True,
+                text=True,
             )
-            
+
             # Files that differ (sizes/hashes differ)
             result_diff = subprocess.run(
                 ["rclone", "check", source_path, destination_path],
-                capture_output=True, text=True
+                capture_output=True,
+                text=True,
             )
 
             # Parse stderr (rclone outputs check results to stderr)
@@ -588,21 +615,31 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
 
             if only_in_source or only_in_dest or differ:
                 if only_in_source:
-                    console.print(f"\n[green]+ {len(only_in_source)} files only in SOURCE (will be COPIED):[/green]")
+                    console.print(
+                        f"\n[green]+ {len(only_in_source)} files only in SOURCE (will be COPIED):[/green]"
+                    )
                     for f in only_in_source[:10]:
                         console.print(f"  [green]+ {f}[/green]")
                     if len(only_in_source) > 10:
-                        console.print(f"  [dim]... and {len(only_in_source) - 10} more[/dim]")
+                        console.print(
+                            f"  [dim]... and {len(only_in_source) - 10} more[/dim]"
+                        )
 
                 if only_in_dest:
-                    console.print(f"\n[red]- {len(only_in_dest)} files only in DESTINATION (will be DELETED):[/red]")
+                    console.print(
+                        f"\n[red]- {len(only_in_dest)} files only in DESTINATION (will be DELETED):[/red]"
+                    )
                     for f in only_in_dest[:10]:
                         console.print(f"  [red]- {f}[/red]")
                     if len(only_in_dest) > 10:
-                        console.print(f"  [dim]... and {len(only_in_dest) - 10} more[/dim]")
+                        console.print(
+                            f"  [dim]... and {len(only_in_dest) - 10} more[/dim]"
+                        )
 
                 if differ:
-                    console.print(f"\n[yellow]~ {len(differ)} files differ (will be OVERWRITTEN):[/yellow]")
+                    console.print(
+                        f"\n[yellow]~ {len(differ)} files differ (will be OVERWRITTEN):[/yellow]"
+                    )
                     for f in differ[:10]:
                         console.print(f"  [yellow]~ {f}[/yellow]")
                     if len(differ) > 10:
@@ -610,7 +647,9 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
 
                 console.print()
             else:
-                console.print("[green]✓ No differences found. Files are identical.[/green]\n")
+                console.print(
+                    "[green]✓ No differences found. Files are identical.[/green]\n"
+                )
 
         except Exception as e:
             console.print(f"[yellow]⚠️  Preview failed: {e}[/yellow]\n")
@@ -620,6 +659,7 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
         console.print("[dim]Dry run mode: No changes will be made.[/dim]\n")
     elif not force:
         from rich.prompt import Confirm
+
         if not Confirm.ask("[bold red]Proceed with sync?[/bold red]", default=False):
             console.print("[dim]Sync cancelled.[/dim]")
             return
@@ -677,13 +717,15 @@ def generate_default_config():
 
     # Add filters section with default exclude patterns
     config["filters"] = {
-        "exclude": "\n".join([
-            "node_modules/",
-            "__pycache__/",
-            "*.pyc",
-            "*.tmp",
-            "*.swp",
-        ])
+        "exclude": "\n".join(
+            [
+                "node_modules/",
+                "__pycache__/",
+                "*.pyc",
+                "*.tmp",
+                "*.swp",
+            ]
+        )
     }
 
     with open(config_path, "w") as configfile:
@@ -742,67 +784,112 @@ def ls_remote():
         console.print("[bold red]No rclone remotes found.[/bold red]")
         return
 
-    # Step 1: Select Remote to Browse
     console.print("\n[bold cyan]-- Step 1: Select Remote to Browse --[/bold cyan]")
     remote = choose_from_list(remotes, "Select remote to browse:")
     if not remote:
         return
 
+    from .utils import _fzf_available, _run_fzf
+
     current_path = f"{remote}:"
     while True:
-        console.print(f"\n[bold cyan]Path:[/bold cyan] {current_path}")
         try:
             with console.status(f"[dim]Listing {current_path}...[/dim]"):
                 output = subprocess.check_output(
-                    ["rclone", "lsjson", current_path],
-                    stderr=subprocess.DEVNULL
+                    ["rclone", "lsjson", current_path], stderr=subprocess.DEVNULL
                 ).decode("utf-8")
 
             items = json.loads(output)
             dirs = [i for i in items if i["IsDir"]]
             files = [i for i in items if not i["IsDir"]]
 
-            if not dirs and not files:
-                console.print("[dim]-- Empty --[/dim]")
-
-            for i, d in enumerate(dirs, 1):
-                console.print(f"  {i:>3}. 📁 [bold]{d['Name']}[/bold]")
-
-            for i, f in enumerate(files, len(dirs) + 1):
-                size = f.get("Size", 0)
-                date = f.get("ModTime", "")[:10]
-                if size >= 1_073_741_824:
-                    size_str = f"{size/1_073_741_824:.1f} GB"
-                elif size >= 1_048_576:
-                    size_str = f"{size/1_048_576:.1f} MB"
-                elif size >= 1024:
-                    size_str = f"{size/1024:.1f} KB"
-                else:
-                    size_str = f"{size} B"
-                console.print(f"  {i:>3}. 📄 {f['Name']}  [dim]{size_str}  {date}[/dim]")
-
-            choice = Prompt.ask(
-                "\n[yellow]Number to enter folder, '..' to go up, 'q' to quit[/yellow]"
-            )
-
-            if choice and choice.lower() == "q":
-                break
-            elif choice == "..":
-                if current_path.rstrip("/") == f"{remote}:":
-                    continue
-                current_path = os.path.dirname(current_path.rstrip("/"))
-                if not current_path.endswith(":"):
-                    current_path += "/"
-            elif choice:
-                try:
-                    idx = int(choice.strip()) - 1
-                    if 0 <= idx < len(dirs):
-                        current_path = current_path.rstrip("/") + "/" + dirs[idx]["Name"] + "/"
+            if _fzf_available():
+                display_items = []
+                for d in dirs:
+                    display_items.append(f"📁 {d['Name']}/")
+                for f in files:
+                    size = f.get("Size", 0)
+                    if size >= 1_073_741_824:
+                        size_str = f"{size / 1_073_741_824:.1f} GB"
+                    elif size >= 1_048_576:
+                        size_str = f"{size / 1_048_576:.1f} MB"
+                    elif size >= 1024:
+                        size_str = f"{size / 1024:.1f} KB"
                     else:
-                        console.print("[bold red]Invalid choice. That's a file, not a folder.[/bold red]")
-                except ValueError:
-                    console.print("[bold red]Invalid choice. Please enter a number, '..', or 'q'.[/bold red]")
-                    continue
+                        size_str = f"{size} B"
+                    display_items.append(
+                        f"📄 {f['Name']}  {size_str}  {f.get('ModTime', '')[:10]}"
+                    )
+                display_items.append(".. (go up)")
+                display_items.append("q (quit)")
+
+                selected = _run_fzf(display_items, prompt=f"📂 {current_path} > ")
+                if not selected:
+                    break
+
+                choice = selected[0]
+                if choice == "q (quit)":
+                    break
+                elif choice == ".. (go up)":
+                    if current_path.rstrip("/") == f"{remote}:":
+                        continue
+                    current_path = current_path.rstrip("/")
+                    current_path = current_path.rsplit("/", 1)[0] + "/"
+                    if not current_path.endswith(":"):
+                        current_path = current_path.rsplit("/", 1)[0] + "/"
+                else:
+                    name = choice[2:].split("  ")[0].rstrip("/")
+                    current_path = current_path.rstrip("/") + "/" + name + "/"
+            else:
+                if not dirs and not files:
+                    console.print("[dim]-- Empty --[/dim]")
+
+                for i, d in enumerate(dirs, 1):
+                    console.print(f"  {i:>3}. 📁 [bold]{d['Name']}[/bold]")
+
+                for i, f in enumerate(files, len(dirs) + 1):
+                    size = f.get("Size", 0)
+                    date = f.get("ModTime", "")[:10]
+                    if size >= 1_073_741_824:
+                        size_str = f"{size / 1_073_741_824:.1f} GB"
+                    elif size >= 1_048_576:
+                        size_str = f"{size / 1_048_576:.1f} MB"
+                    elif size >= 1024:
+                        size_str = f"{size / 1024:.1f} KB"
+                    else:
+                        size_str = f"{size} B"
+                    console.print(
+                        f"  {i:>3}. 📄 {f['Name']}  [dim]{size_str}  {date}[/dim]"
+                    )
+
+                choice = Prompt.ask(
+                    "\n[yellow]Number to enter folder, '..' to go up, 'q' to quit[/yellow]"
+                )
+
+                if choice and choice.lower() == "q":
+                    break
+                elif choice == "..":
+                    if current_path.rstrip("/") == f"{remote}:":
+                        continue
+                    current_path = os.path.dirname(current_path.rstrip("/"))
+                    if not current_path.endswith(":"):
+                        current_path += "/"
+                elif choice:
+                    try:
+                        idx = int(choice.strip()) - 1
+                        if 0 <= idx < len(dirs):
+                            current_path = (
+                                current_path.rstrip("/") + "/" + dirs[idx]["Name"] + "/"
+                            )
+                        else:
+                            console.print(
+                                "[bold red]Invalid choice. That's a file, not a folder.[/bold red]"
+                            )
+                    except ValueError:
+                        console.print(
+                            "[bold red]Invalid choice. Please enter a number, '..', or 'q'.[/bold red]"
+                        )
+                        continue
         except subprocess.CalledProcessError as e:
             console.print(f"[bold red]Error listing path: {e}[/bold red]")
             current_path = f"{remote}:"
@@ -873,7 +960,7 @@ def space_remote():
     # Step 1: Select Remote(s) to Check
     console.print("\n[bold cyan]-- Step 1: Select Remote(s) to Check --[/bold cyan]")
     selected = choose_from_list(
-        remotes, "Select remote(s) to check (e.g., 1 or 1,2 or 'all'):"
+        remotes, "Select remote(s) to check (e.g., 1 or 1,2 or 'all'):", multi=True
     )
     if not selected:
         return
@@ -933,7 +1020,7 @@ def copy_between():
 
     command = ["rclone", "copy", source_path, dest_path]
     returncode, errors = _run_rclone_with_stats("Copying", command)
-    
+
     if returncode == 0:
         console.rule("[bold green]✅ Copy Complete[/bold green]")
     else:
@@ -984,7 +1071,7 @@ def bisync_remotes():
 
     label = "Bisync"
     returncode, errors = _run_rclone_with_stats(label, command)
-    
+
     if returncode == 0:
         console.rule("[bold green]✅ Bisync Complete[/bold green]")
     else:
@@ -998,21 +1085,21 @@ def manage_filters():
     Interactive menu to manage global exclude/include filters.
     """
     from .config import get_filters
-    
+
     config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
-    
+
     def load_config():
         config = ConfigParser()
         config.read(config_path)
         return config
-    
+
     def save_config(config):
         with open(config_path, "w") as f:
             config.write(f)
-    
+
     while True:
         filters = get_filters(PROJECT_ROOT)
-        
+
         console.print("\n[bold cyan]--- Filter Management ---[/bold cyan]")
         console.print("\n[bold]Current Exclude Patterns:[/bold]")
         if filters["exclude"]:
@@ -1020,27 +1107,25 @@ def manage_filters():
                 console.print(f"  {i}. [yellow]{pattern}[/yellow]")
         else:
             console.print("  [dim]None[/dim]")
-        
+
         console.print("\n[bold]Current Include Patterns:[/bold]")
         if filters["include"]:
             for i, pattern in enumerate(filters["include"], 1):
                 console.print(f"  {i}. [cyan]{pattern}[/cyan]")
         else:
             console.print("  [dim]None[/dim]")
-        
+
         console.print("\n1. Add Exclude Pattern")
         console.print("2. Remove Exclude Pattern")
         console.print("3. Add Include Pattern")
         console.print("4. Remove Include Pattern")
         console.print("5. Reset to Defaults")
         console.print("6. Exit")
-        
+
         choice = Prompt.ask(
-            "\nEnter your choice",
-            choices=["1", "2", "3", "4", "5", "6"],
-            default="6"
+            "\nEnter your choice", choices=["1", "2", "3", "4", "5", "6"], default="6"
         )
-        
+
         if choice == "1":
             pattern = Prompt.ask("Enter exclude pattern (e.g., *.log, node_modules/)")
             if pattern:
@@ -1053,7 +1138,7 @@ def manage_filters():
                 config["filters"]["exclude"] = "\n".join(patterns)
                 save_config(config)
                 console.print(f"[green]✅ Added exclude pattern: {pattern}[/green]")
-        
+
         elif choice == "2":
             if not filters["exclude"]:
                 console.print("[yellow]No exclude patterns to remove.[/yellow]")
@@ -1070,7 +1155,7 @@ def manage_filters():
             config["filters"]["exclude"] = "\n".join(patterns) if patterns else ""
             save_config(config)
             console.print(f"[green]✅ Removed: {removed}[/green]")
-        
+
         elif choice == "3":
             pattern = Prompt.ask("Enter include pattern (e.g., important/*, *.pdf)")
             if pattern:
@@ -1083,7 +1168,7 @@ def manage_filters():
                 config["filters"]["include"] = "\n".join(patterns)
                 save_config(config)
                 console.print(f"[green]✅ Added include pattern: {pattern}[/green]")
-        
+
         elif choice == "4":
             if not filters["include"]:
                 console.print("[yellow]No include patterns to remove.[/yellow]")
@@ -1100,9 +1185,14 @@ def manage_filters():
             config["filters"]["include"] = "\n".join(patterns) if patterns else ""
             save_config(config)
             console.print(f"[green]✅ Removed: {removed}[/green]")
-        
+
         elif choice == "5":
-            if Prompt.ask("Reset to default patterns?", choices=["y", "n"], default="n") == "y":
+            if (
+                Prompt.ask(
+                    "Reset to default patterns?", choices=["y", "n"], default="n"
+                )
+                == "y"
+            ):
                 config = load_config()
                 if "filters" not in config:
                     config["filters"] = {}
@@ -1117,7 +1207,7 @@ def manage_filters():
                 config["filters"]["include"] = ""
                 save_config(config)
                 console.print("[green]✅ Reset to default patterns.[/green]")
-        
+
         elif choice == "6":
             console.print("[dim]Exiting filter management.[/dim]")
             break

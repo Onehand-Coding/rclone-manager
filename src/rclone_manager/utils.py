@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import time
@@ -12,20 +13,92 @@ from rich.prompt import Prompt
 console = Console()
 
 
+def _toggle_fzf(action: str) -> None:
+    """Toggle fzf on/off by writing USE_FZF to config.ini."""
+    from .config import PROJECT_ROOT
+    from configparser import ConfigParser
+
+    config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
+
+    if not os.path.exists(config_path):
+        console.print(
+            "[bold red]config.ini not found. Run 'rman generate-config' first.[/bold red]"
+        )
+        return
+
+    config = ConfigParser()
+    config.read(config_path)
+
+    if action == "status":
+        enabled = os.environ.get("USE_FZF", "true").lower() != "false"
+        has_fzf = shutil.which("fzf") is not None
+        console.print(f"\n[bold]Fuzzy Search Status[/bold]")
+        console.print(
+            f"  Config  : {'[green]ON[/green]' if enabled else '[yellow]OFF[/yellow]'}"
+        )
+        console.print(
+            f"  fzf     : {'[green]installed[/green]' if has_fzf else '[red]not found[/red]'}"
+        )
+        console.print(
+            f"  Active  : {'[green]yes[/green]' if _fzf_available() else '[red]no[/red]'}"
+        )
+        return
+
+    new_value = "true" if action == "on" else "false"
+
+    if "DEFAULT" not in config:
+        config["DEFAULT"] = {}
+    config["DEFAULT"]["USE_FZF"] = new_value
+
+    with open(config_path, "w") as f:
+        config.write(f)
+
+    label = "[green]ON[/green]" if action == "on" else "[yellow]OFF[/yellow]"
+    console.print(f"\n[bold]Fuzzy search set to {label}.[/bold]")
+    console.print("[dim]Restart the app for changes to take effect.[/dim]")
+
+
+def _fzf_available() -> bool:
+    """Check if fzf is installed and enabled in config."""
+    if os.environ.get("USE_FZF", "true").lower() == "false":
+        return False
+    return shutil.which("fzf") is not None
+
+
+def _run_fzf(items: List[str], prompt: str = "", multi: bool = False) -> List[str]:
+    """Run fzf with the given items and return selected items."""
+    fzf_cmd = ["fzf", "--height=40%", "--layout=reverse", "--border=rounded"]
+    if prompt:
+        fzf_cmd.extend(["--prompt", f"{prompt} "])
+    if multi:
+        fzf_cmd.append("-m")
+
+    proc = subprocess.run(
+        fzf_cmd, input="\n".join(items), capture_output=True, text=True
+    )
+
+    if proc.returncode != 0:
+        return []
+
+    return [line for line in proc.stdout.strip().split("\n") if line]
+
+
 def _get_rc_stats(port: int) -> Optional[dict]:
     """
     Fetch transfer statistics from rclone's rc API.
-    
+
     Args:
         port: The rc port to connect to
-        
+
     Returns:
         Dict with stats (bytes, totalBytes, speed, transfers, totalTransfers) or None if unavailable
     """
     try:
         result = subprocess.run(
             ["rclone", "rc", "core/stats", f"--rc-addr=127.0.0.1:{port}"],
-            capture_output=True, text=True, timeout=3
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if result.returncode == 0:
             return json.loads(result.stdout)
@@ -42,22 +115,21 @@ def _run_rclone_with_stats(
 ) -> tuple[int, list]:
     """
     Run an rclone command with live transfer statistics display.
-    
+
     Uses rclone's rc API to poll transfer stats and display:
     - Files transferred / total files
     - Bytes transferred / total bytes
     - Current transfer speed
-    
+
     Args:
         label: Display label for the operation (e.g., "Syncing", "Copying")
         command: The rclone command to execute (without --rc flags)
         rc_port: Port for rclone's rc API (default: 5580)
         stdin_data: Optional data to pipe to stdin (for --files-from)
-        
+
     Returns:
         Tuple of (returncode, error_messages)
     """
-    # Add rc flags to command
     command = command + ["--rc", f"--rc-addr=127.0.0.1:{rc_port}"]
 
     proc = subprocess.Popen(
@@ -68,7 +140,6 @@ def _run_rclone_with_stats(
         text=True,
     )
 
-    # Write stdin_data immediately before polling loop
     if stdin_data:
         proc.stdin.write(stdin_data)
         proc.stdin.close()
@@ -85,7 +156,6 @@ def _run_rclone_with_stats(
                 transfers = stats.get("transfers", 0)
                 total_transfers = stats.get("totalTransfers", 0)
 
-                # Format bytes for display
                 if total_bytes > 0:
                     mb_transferred = transferred / 1024 / 1024
                     mb_total = total_bytes / 1024 / 1024
@@ -96,26 +166,22 @@ def _run_rclone_with_stats(
 
                 speed_mb = speed / 1024 / 1024
 
-                # Build status line
                 if total_transfers > 0:
                     status.update(
                         f"[dim]{label} {transfers}/{total_transfers} files  "
                         f"{speed_mb:.1f} MB/s  {size_str}[/dim]"
                     )
                 else:
-                    status.update(
-                        f"[dim]{label} {speed_mb:.1f} MB/s  {size_str}[/dim]"
-                    )
+                    status.update(f"[dim]{label} {speed_mb:.1f} MB/s  {size_str}[/dim]")
             else:
                 status.update(f"[dim]{label} running...[/dim]")
 
     _, stderr = proc.communicate()
     if stderr:
         errors = [line for line in stderr.strip().splitlines() if "ERROR" in line]
-        # If process failed but no ERROR lines found, capture last 5 lines of stderr
         if not errors and proc.returncode != 0:
             errors = stderr.strip().splitlines()[-5:]
-    
+
     return proc.returncode, errors
 
 
@@ -125,7 +191,6 @@ def get_ip_address() -> str:
     """
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        # doesn't even have to be reachable
         s.connect(("10.255.255.255", 1))
         IP = s.getsockname()[0]
     except Exception:
@@ -142,7 +207,6 @@ def list_rclone_remotes() -> List[str]:
     try:
         output = subprocess.check_output(["rclone", "listremotes"]).decode("utf-8")
         remotes = [line.strip().replace(":", "") for line in output.strip().split("\n")]
-        # Filter out the shared remotes to avoid duplicates in the list
         return [r for r in remotes if not r.endswith("-shared")]
     except FileNotFoundError:
         console.print("[bold red]rclone not found. Please install it.[/bold red]")
@@ -174,18 +238,23 @@ def get_rclone_flags(remote_type: str) -> List[str]:
 
 
 def choose_from_list(
-    items: List[str], message: str, item_type: str = "items", allow_quit: bool = True
-) -> Union[List[str], str]:
+    items: List[str],
+    message: str,
+    item_type: str = "items",
+    allow_quit: bool = True,
+    multi: bool = False,
+) -> Union[List[str], str, None]:
     """
     Prompts the user to choose one or more items from a list.
     Returns a single item if one is chosen, otherwise a list.
-    
+
     Args:
         items: List of items to choose from
         message: Prompt message to display
         item_type: Description of items for error messages
         allow_quit: If True, allows user to type 'q' or 'quit' to exit (returns None)
-    
+        multi: If True, allows multi-selection via fzf -m or comma-separated indices
+
     Returns:
         Selected item(s) or None if user quits or no items available
     """
@@ -193,40 +262,49 @@ def choose_from_list(
         console.print(f"[bold red]No {item_type} found in this directory.[/bold red]")
         return None
 
+    if _fzf_available():
+        selected = _run_fzf(items, prompt=message, multi=multi)
+        if not selected:
+            console.print("[dim]Cancelled.[/dim]")
+            return None
+        return selected[0] if len(selected) == 1 else selected
+
     while True:
         for i, item in enumerate(items):
-            # Display directories with a trailing slash
             display_item = f"{item}/" if item.endswith("/") else item
             console.print(f"{i + 1}. {display_item}")
 
         choices_str = Prompt.ask(f"[yellow]{message}[/yellow]")
-        
-        # Allow user to quit
-        if allow_quit and choices_str and choices_str.lower() in ['q', 'quit']:
+
+        if allow_quit and choices_str and choices_str.lower() in ["q", "quit"]:
             console.print("[dim]Cancelled.[/dim]")
             return None
-        
+
         if not choices_str:
             console.print("[bold red]Please enter a number or 'q' to quit.[/bold red]")
             continue
-            
+
         if any(not i.strip().isdigit() for i in choices_str.split(",")):
-            console.print("[bold red]Invalid choice. Please enter numbers only (e.g., 1 or 1,2).[/bold red]")
+            console.print(
+                "[bold red]Invalid choice. Please enter numbers only (e.g., 1 or 1,2).[/bold red]"
+            )
             continue
 
         selected_indices = [int(i.strip()) - 1 for i in choices_str.split(",")]
         if any(i < 0 or i >= len(items) for i in selected_indices):
-            console.print(f"[bold red]Invalid choice. Please enter numbers between 1 and {len(items)}.[/bold red]")
+            console.print(
+                f"[bold red]Invalid choice. Please enter numbers between 1 and {len(items)}.[/bold red]"
+            )
             continue
-            
+
         selected_items = [items[i] for i in selected_indices]
         return selected_items[0] if len(selected_items) == 1 else selected_items
 
 
-def navigate_local_file_system(purpose: str = None) -> Union[List[str], str]:
+def navigate_local_file_system(purpose: str = None) -> Union[List[str], str, None]:
     """
     Allows the user to navigate the local file system and select files or a directory.
-    
+
     Args:
         purpose: Optional description of what is being selected (e.g., "local folder", "source directory")
     """
@@ -242,43 +320,73 @@ def navigate_local_file_system(purpose: str = None) -> Union[List[str], str]:
                 f for f in all_items if os.path.isfile(os.path.join(current_dir, f))
             ]
 
-            console.print(f"\n[bold cyan]Current Directory:[/bold cyan] {current_dir}")
-
             items = dirs + files
-            for i, item in enumerate(items):
-                if item in dirs:
-                    console.print(f"{i + 1}. 📁 {item}/")
+
+            if _fzf_available():
+                display_items = []
+                for item in items:
+                    if item in dirs:
+                        display_items.append(f"📁 {item}/")
+                    else:
+                        display_items.append(f"📄 {item}")
+                display_items.append(".. (go up)")
+                display_items.append(f". (select this {purpose or 'directory'})")
+
+                selected = _run_fzf(display_items, prompt=f"📂 {current_dir} > ")
+                if not selected:
+                    console.print("[dim]Cancelled.[/dim]")
+                    return None
+
+                choice = selected[0]
+                if choice == ".. (go up)":
+                    current_dir = os.path.dirname(current_dir)
+                    continue
+                elif choice.startswith(". (select this"):
+                    return current_dir
                 else:
-                    console.print(f"{i + 1}. 📄 {item}")
-
-            # Build contextual prompt
-            if purpose:
-                prompt = f"[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this {purpose}, 'q' to quit.[/yellow]"
+                    name = choice[2:].rstrip("/")
+                    if name in dirs:
+                        current_dir = os.path.join(current_dir, name)
+                    else:
+                        return os.path.join(current_dir, name)
             else:
-                prompt = "[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this directory, 'q' to quit.[/yellow]"
-            choice = Prompt.ask(prompt)
+                console.print(
+                    f"\n[bold cyan]Current Directory:[/bold cyan] {current_dir}"
+                )
 
-            if choice and choice.lower() in ['q', 'quit']:
-                console.print("[dim]Cancelled.[/dim]")
-                return None
-                
-            if choice == "..":
-                current_dir = os.path.dirname(current_dir)
-                continue
+                for i, item in enumerate(items):
+                    if item in dirs:
+                        console.print(f"{i + 1}. 📁 {item}/")
+                    else:
+                        console.print(f"{i + 1}. 📄 {item}")
 
-            elif choice.lower() in [".", "d"]:
-                return current_dir
+                if purpose:
+                    prompt = f"[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this {purpose}, 'q' to quit.[/yellow]"
+                else:
+                    prompt = "[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this directory, 'q' to quit.[/yellow]"
+                choice = Prompt.ask(prompt)
 
-            selected_indices = [int(i.strip()) - 1 for i in choice.split(",")]
-            selected_items = [items[i] for i in selected_indices]
+                if choice and choice.lower() in ["q", "quit"]:
+                    console.print("[dim]Cancelled.[/dim]")
+                    return None
 
-            if len(selected_items) == 1 and selected_items[0] in dirs:
-                current_dir = os.path.join(current_dir, selected_items[0])
-            else:
-                full_paths = [
-                    os.path.join(current_dir, item) for item in selected_items
-                ]
-                return full_paths[0] if len(full_paths) == 1 else full_paths
+                if choice == "..":
+                    current_dir = os.path.dirname(current_dir)
+                    continue
+
+                elif choice.lower() in [".", "d"]:
+                    return current_dir
+
+                selected_indices = [int(i.strip()) - 1 for i in choice.split(",")]
+                selected_items = [items[i] for i in selected_indices]
+
+                if len(selected_items) == 1 and selected_items[0] in dirs:
+                    current_dir = os.path.join(current_dir, selected_items[0])
+                else:
+                    full_paths = [
+                        os.path.join(current_dir, item) for item in selected_items
+                    ]
+                    return full_paths[0] if len(full_paths) == 1 else full_paths
 
         except (ValueError, IndexError):
             console.print("[bold red]Invalid choice.[/bold red]")
@@ -287,10 +395,12 @@ def navigate_local_file_system(purpose: str = None) -> Union[List[str], str]:
             current_dir = os.path.expanduser("~")
 
 
-def navigate_remote_file_system(remote: str, purpose: str = None) -> Union[List[str], str]:
+def navigate_remote_file_system(
+    remote: str, purpose: str = None
+) -> Union[List[str], str, None]:
     """
     Allows the user to navigate a remote file system and select one or more files/directories.
-    
+
     Args:
         remote: The remote name to navigate
         purpose: Optional description of what is being selected (e.g., "destination path", "source files")
@@ -302,50 +412,78 @@ def navigate_remote_file_system(remote: str, purpose: str = None) -> Union[List[
                 output = subprocess.check_output(
                     ["rclone", "lsf", current_path]
                 ).decode("utf-8")
-            items = sorted(output.strip().split("\n"))
+            items = sorted(output.strip().split("\n")) if output.strip() else []
 
-            console.print(
-                f"\n[bold cyan]Current Remote Path:[/bold cyan] {current_path}"
-            )
+            if _fzf_available():
+                display_items = []
+                for item in items:
+                    if item.endswith("/"):
+                        display_items.append(f"📁 {item}")
+                    else:
+                        display_items.append(f"📄 {item}")
+                display_items.append(".. (go up)")
+                display_items.append(f". (select this {purpose or 'path'})")
 
-            if not any(items):
-                console.print("[dim]-- Empty --[/dim]")
+                selected = _run_fzf(display_items, prompt=f"📂 {current_path} > ")
+                if not selected:
+                    console.print("[dim]Cancelled.[/dim]")
+                    return None
 
-            for i, item in enumerate(items):
-                if item.endswith("/"):
-                    console.print(f"{i + 1}. 📁 {item}")
+                choice = selected[0]
+                if choice == ".. (go up)":
+                    if current_path.rstrip("/") == f"{remote}:":
+                        continue
+                    current_path = current_path.rstrip("/")
+                    current_path = current_path.rsplit("/", 1)[0] + "/"
+                    if not current_path.endswith(":"):
+                        current_path = current_path.rsplit("/", 1)[0] + "/"
+                elif choice.startswith(". (select this"):
+                    return current_path
                 else:
-                    console.print(f"{i + 1}. 📄 {item}")
-
-            # Build contextual prompt
-            if purpose:
-                prompt = f"[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this {purpose}, 'q' to quit.[/yellow]"
+                    name = choice[2:]
+                    if name.endswith("/"):
+                        current_path = current_path.rstrip("/") + "/" + name
+                    else:
+                        return current_path.rstrip("/") + "/" + name
             else:
-                prompt = "[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this path, 'q' to quit.[/yellow]"
-            choice = Prompt.ask(prompt)
+                console.print(
+                    f"\n[bold cyan]Current Remote Path:[/bold cyan] {current_path}"
+                )
 
-            if choice and choice.lower() in ['q', 'quit']:
-                console.print("[dim]Cancelled.[/dim]")
-                return None
+                if not any(items):
+                    console.print("[dim]-- Empty --[/dim]")
 
-            if choice.lower() in [".", "d"]:
-                return current_path
-            elif choice == "..":
-                if current_path.strip("/") == f"{remote}:".strip("/"):
-                    continue
-                current_path = os.path.dirname(current_path.rstrip("/")) + "/"
-            else:
-                # --- Handle multiple selections ---
-                selected_indices = [int(i.strip()) - 1 for i in choice.split(",")]
-                selected_items = [items[i] for i in selected_indices]
+                for i, item in enumerate(items):
+                    if item.endswith("/"):
+                        console.print(f"{i + 1}. 📁 {item}")
+                    else:
+                        console.print(f"{i + 1}. 📄 {item}")
 
-                # If user selected a single directory, navigate into it
-                if len(selected_items) == 1 and selected_items[0].endswith("/"):
-                    current_path += selected_items[0]
+                if purpose:
+                    prompt = f"[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this {purpose}, 'q' to quit.[/yellow]"
                 else:
-                    # User has selected one or more files/folders, return their full paths
-                    full_paths = [current_path + item for item in selected_items]
-                    return full_paths[0] if len(full_paths) == 1 else full_paths
+                    prompt = "[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this path, 'q' to quit.[/yellow]"
+                choice = Prompt.ask(prompt)
+
+                if choice and choice.lower() in ["q", "quit"]:
+                    console.print("[dim]Cancelled.[/dim]")
+                    return None
+
+                if choice.lower() in [".", "d"]:
+                    return current_path
+                elif choice == "..":
+                    if current_path.strip("/") == f"{remote}:".strip("/"):
+                        continue
+                    current_path = os.path.dirname(current_path.rstrip("/")) + "/"
+                else:
+                    selected_indices = [int(i.strip()) - 1 for i in choice.split(",")]
+                    selected_items = [items[i] for i in selected_indices]
+
+                    if len(selected_items) == 1 and selected_items[0].endswith("/"):
+                        current_path += selected_items[0]
+                    else:
+                        full_paths = [current_path + item for item in selected_items]
+                        return full_paths[0] if len(full_paths) == 1 else full_paths
 
         except (ValueError, IndexError):
             console.print("[bold red]Invalid choice.[/bold red]")
