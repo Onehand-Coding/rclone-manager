@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 import subprocess
 import threading
 from configparser import ConfigParser
@@ -20,6 +21,7 @@ from .utils import (
 )
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 def serve_remote():
@@ -155,7 +157,13 @@ def _serve_remote_thread(
         try:
             subprocess.run(command, check=True)
         except subprocess.CalledProcessError as e:
-            console.print(f"[bold red]Error serving {remote_path}: {e}[/bold red]")
+            stderr = (
+                e.stderr
+                if isinstance(e.stderr, str)
+                else e.stderr.decode("utf-8", errors="replace")
+            )
+            console.print(f"[bold red]Error serving {remote_path}: {stderr}[/bold red]")
+            logger.error(f"Failed to serve {remote_path}: {e}")
 
 
 def serve_local():
@@ -199,7 +207,11 @@ def serve_local():
 
     console.print(f"[dim]Command: {' '.join(command)}[/dim]")
     with console.status(f"[dim]Serving {local_path}...[/dim]"):
-        subprocess.run(command)
+        try:
+            subprocess.run(command, check=True)
+        except subprocess.CalledProcessError as e:
+            console.print(f"[bold red]Error serving {local_path}: {e}[/bold red]")
+            logger.error(f"Failed to serve local path {local_path}: {e}")
 
 
 def upload_backup(overwrite: bool = False):
@@ -793,6 +805,11 @@ def ls_remote():
 
     current_path = f"{remote}:"
     while True:
+        items = None
+        dirs = []
+        files = []
+        use_lsf = False
+
         try:
             with console.status(f"[dim]Listing {current_path}...[/dim]"):
                 output = subprocess.check_output(
@@ -803,103 +820,158 @@ def ls_remote():
             dirs = [i for i in items if i["IsDir"]]
             files = [i for i in items if not i["IsDir"]]
 
-            if _fzf_available():
-                display_items = []
-                for d in dirs:
-                    display_items.append(f"📁 {d['Name']}/")
-                for f in files:
-                    size = f.get("Size", 0)
-                    if size >= 1_073_741_824:
-                        size_str = f"{size / 1_073_741_824:.1f} GB"
-                    elif size >= 1_048_576:
-                        size_str = f"{size / 1_048_576:.1f} MB"
-                    elif size >= 1024:
-                        size_str = f"{size / 1024:.1f} KB"
-                    else:
-                        size_str = f"{size} B"
-                    display_items.append(
-                        f"📄 {f['Name']}  {size_str}  {f.get('ModTime', '')[:10]}"
-                    )
-                display_items.append(".. (go up)")
-                display_items.append("q (quit)")
-
-                selected = _run_fzf(display_items, prompt=f"📂 {current_path} > ")
-                if not selected:
-                    break
-
-                choice = selected[0]
-                if choice == "q (quit)":
-                    break
-                elif choice == ".. (go up)":
-                    if current_path.rstrip("/") == f"{remote}:":
-                        continue
-                    current_path = current_path.rstrip("/")
-                    current_path = current_path.rsplit("/", 1)[0] + "/"
-                    if not current_path.endswith(":"):
-                        current_path = current_path.rsplit("/", 1)[0] + "/"
-                else:
-                    name = choice[2:].split("  ")[0].rstrip("/")
-                    current_path = current_path.rstrip("/") + "/" + name + "/"
-            else:
-                if not dirs and not files:
-                    console.print("[dim]-- Empty --[/dim]")
-
-                for i, d in enumerate(dirs, 1):
-                    console.print(f"  {i:>3}. 📁 [bold]{d['Name']}[/bold]")
-
-                for i, f in enumerate(files, len(dirs) + 1):
-                    size = f.get("Size", 0)
-                    date = f.get("ModTime", "")[:10]
-                    if size >= 1_073_741_824:
-                        size_str = f"{size / 1_073_741_824:.1f} GB"
-                    elif size >= 1_048_576:
-                        size_str = f"{size / 1_048_576:.1f} MB"
-                    elif size >= 1024:
-                        size_str = f"{size / 1024:.1f} KB"
-                    else:
-                        size_str = f"{size} B"
-                    console.print(
-                        f"  {i:>3}. 📄 {f['Name']}  [dim]{size_str}  {date}[/dim]"
-                    )
-
-                choice = Prompt.ask(
-                    "\n[yellow]Number to enter folder, '..' to go up, 'q' to quit[/yellow]"
-                )
-
-                if choice and choice.lower() == "q":
-                    break
-                elif choice == "..":
-                    if current_path.rstrip("/") == f"{remote}:":
-                        continue
-                    current_path = os.path.dirname(current_path.rstrip("/"))
-                    if not current_path.endswith(":"):
-                        current_path += "/"
-                elif choice:
-                    try:
-                        idx = int(choice.strip()) - 1
-                        if 0 <= idx < len(dirs):
-                            current_path = (
-                                current_path.rstrip("/") + "/" + dirs[idx]["Name"] + "/"
-                            )
-                        else:
-                            console.print(
-                                "[bold red]Invalid choice. That's a file, not a folder.[/bold red]"
-                            )
-                    except ValueError:
-                        console.print(
-                            "[bold red]Invalid choice. Please enter a number, '..', or 'q'.[/bold red]"
-                        )
-                        continue
         except subprocess.CalledProcessError as e:
             stderr = e.stderr.decode("utf-8", errors="replace") if e.stderr else ""
+
             if "invalid_grant" in stderr or "token" in stderr.lower():
                 console.print(
                     f"[bold red]Authentication error for [cyan]{remote}[/cyan]. Token may be expired.[/bold red]"
                 )
                 console.print(f"[dim]Run: rclone config reconnect {remote}[/dim]")
+                break
+            elif (
+                "SIGSEGV" in stderr
+                or "nil pointer" in stderr
+                or "mega" in stderr.lower()
+            ):
+                console.print(
+                    f"[bold yellow]MEGA backend error for [cyan]{remote}[/cyan]. Falling back to lsf...[/bold yellow]"
+                )
+                use_lsf = True
             else:
                 console.print(f"[bold red]Error listing path: {e}[/bold red]")
-            break
+                break
+
+        if use_lsf and items is None:
+            try:
+                with console.status(
+                    f"[dim]Listing {current_path} with lsf fallback...[/dim]"
+                ):
+                    dirs_output = subprocess.check_output(
+                        ["rclone", "lsf", "--dirs-only", current_path]
+                    ).decode("utf-8")
+                    files_output = subprocess.check_output(
+                        ["rclone", "lsf", "--files-only", current_path]
+                    ).decode("utf-8")
+
+                dir_names = [
+                    d.strip().rstrip("/")
+                    for d in dirs_output.strip().split("\n")
+                    if d.strip()
+                ]
+                file_names = [
+                    f.strip() for f in files_output.strip().split("\n") if f.strip()
+                ]
+
+                dirs = [
+                    {"Name": d, "IsDir": True, "Size": 0, "ModTime": ""}
+                    for d in dir_names
+                ]
+                files = [
+                    {"Name": f, "IsDir": False, "Size": 0, "ModTime": ""}
+                    for f in file_names
+                ]
+
+            except subprocess.CalledProcessError as e2:
+                stderr2 = (
+                    e2.stderr.decode("utf-8", errors="replace") if e2.stderr else ""
+                )
+                if "invalid_grant" in stderr2 or "token" in stderr2.lower():
+                    console.print(
+                        f"[bold red]Authentication error for [cyan]{remote}[/cyan]. Token may be expired.[/bold red]"
+                    )
+                    console.print(f"[dim]Run: rclone config reconnect {remote}[/dim]")
+                else:
+                    console.print(f"[bold red]Error listing path: {e2}[/bold red]")
+                break
+
+        if _fzf_available():
+            display_items = []
+            for d in dirs:
+                display_items.append(f"📁 {d['Name']}/")
+            for f in files:
+                size = f.get("Size", 0)
+                if size >= 1_073_741_824:
+                    size_str = f"{size / 1_073_741_824:.1f} GB"
+                elif size >= 1_048_576:
+                    size_str = f"{size / 1_048_576:.1f} MB"
+                elif size >= 1024:
+                    size_str = f"{size / 1024:.1f} KB"
+                else:
+                    size_str = f"{size} B"
+                display_items.append(
+                    f"📄 {f['Name']}  {size_str}  {f.get('ModTime', '')[:10]}"
+                )
+            display_items.append(".. (go up)")
+            display_items.append("q (quit)")
+
+            selected = _run_fzf(display_items, prompt=f"📂 {current_path} > ")
+            if not selected:
+                break
+
+            choice = selected[0]
+            if choice == "q (quit)":
+                break
+            elif choice == ".. (go up)":
+                if current_path.rstrip("/") == f"{remote}:":
+                    continue
+                current_path = current_path.rstrip("/")
+                current_path = current_path.rsplit("/", 1)[0] + "/"
+                if not current_path.endswith(":"):
+                    current_path = current_path.rsplit("/", 1)[0] + "/"
+            else:
+                name = choice[2:].split("  ")[0].rstrip("/")
+                current_path = current_path.rstrip("/") + "/" + name + "/"
+        else:
+            if not dirs and not files:
+                console.print("[dim]-- Empty --[/dim]")
+
+            for i, d in enumerate(dirs, 1):
+                console.print(f"  {i:>3}. 📁 [bold]{d['Name']}[/bold]")
+
+            for i, f in enumerate(files, len(dirs) + 1):
+                size = f.get("Size", 0)
+                date = f.get("ModTime", "")[:10]
+                if size >= 1_073_741_824:
+                    size_str = f"{size / 1_073_741_824:.1f} GB"
+                elif size >= 1_048_576:
+                    size_str = f"{size / 1_048_576:.1f} MB"
+                elif size >= 1024:
+                    size_str = f"{size / 1024:.1f} KB"
+                else:
+                    size_str = f"{size} B"
+                console.print(
+                    f"  {i:>3}. 📄 {f['Name']}  [dim]{size_str}  {date}[/dim]"
+                )
+
+            choice = Prompt.ask(
+                "\n[yellow]Number to enter folder, '..' to go up, 'q' to quit[/yellow]"
+            )
+
+            if choice and choice.lower() == "q":
+                break
+            elif choice == "..":
+                if current_path.rstrip("/") == f"{remote}:":
+                    continue
+                current_path = os.path.dirname(current_path.rstrip("/"))
+                if not current_path.endswith(":"):
+                    current_path += "/"
+            elif choice:
+                try:
+                    idx = int(choice.strip()) - 1
+                    if 0 <= idx < len(dirs):
+                        current_path = (
+                            current_path.rstrip("/") + "/" + dirs[idx]["Name"] + "/"
+                        )
+                    else:
+                        console.print(
+                            "[bold red]Invalid choice. That's a file, not a folder.[/bold red]"
+                        )
+                except ValueError:
+                    console.print(
+                        "[bold red]Invalid choice. Please enter a number, '..', or 'q'.[/bold red]"
+                    )
+                    continue
 
 
 def dedupe_remote():

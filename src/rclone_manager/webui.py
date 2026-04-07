@@ -1,10 +1,14 @@
-import streamlit as st
+import logging
 import os
 import time
 import subprocess
 from io import BytesIO
 from zipfile import ZipFile
 import tempfile
+
+import streamlit as st
+
+logger = logging.getLogger(__name__)
 
 
 def init_session_state():
@@ -36,7 +40,7 @@ def list_rclone_remotes() -> list:
 
 
 def list_remote_directory_contents(remote_path):
-    """List contents of a remote directory"""
+    """List contents of a remote directory using lsf for reliable remote access"""
     try:
         # Use rclone lsf to list files/directories with trailing slash for directories
         output = subprocess.check_output(
@@ -285,12 +289,12 @@ def main_app():
             st.write("**Modified**")
 
         # Add files to the table
-        for item in contents:
+        for idx, item in enumerate(contents):
             cols = st.columns([0.05, 0.5, 0.2, 0.2])
 
             with cols[0]:
-                # Create a unique key for the checkbox
-                checkbox_key = f"select_{item['name']}_{hash(item['name'])}"
+                # Create a unique key for the checkbox using index
+                checkbox_key = f"select_{idx}_{item['name']}"
                 is_selected = st.checkbox(
                     "Select", key=checkbox_key, label_visibility="collapsed"
                 )

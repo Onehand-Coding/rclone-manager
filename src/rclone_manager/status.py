@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import subprocess
 
@@ -7,9 +8,11 @@ from rich.table import Table
 from rich import box
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 
 # ── helpers (duplicated minimally to avoid circular imports) ──────────────────
+
 
 def _get_mount_base() -> str:
     return os.path.expanduser(os.environ.get("MOUNT_DIR", "~/mnt"))
@@ -23,13 +26,20 @@ def _load_registry() -> dict:
     try:
         with open(_registry_path()) as f:
             return json.load(f)
-    except Exception:
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in registry: {e}")
+        return {}
+    except Exception as e:
+        logger.error(f"Failed to load registry: {e}")
         return {}
 
 
 def _sync_pairs_path() -> str:
     """Get the path to sync-pairs.json in the project's configs directory."""
     from .config import PROJECT_ROOT
+
     return os.path.join(PROJECT_ROOT, "configs", "sync-pairs.json")
 
 
@@ -37,7 +47,13 @@ def _load_sync_pairs() -> list:
     try:
         with open(_sync_pairs_path()) as f:
             return json.load(f)
-    except Exception:
+    except FileNotFoundError:
+        return []
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in sync-pairs.json: {e}")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to load sync pairs: {e}")
         return []
 
 
@@ -45,12 +61,18 @@ def _rc_vfs_stats(port: int) -> dict | None:
     try:
         result = subprocess.run(
             ["rclone", "rc", "vfs/stats", f"--rc-addr=127.0.0.1:{port}"],
-            capture_output=True, text=True, timeout=3
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if result.returncode == 0:
             return json.loads(result.stdout)
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Timeout fetching VFS stats from port {port}")
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse VFS stats: {e}")
+    except Exception as e:
+        logger.warning(f"Failed to get VFS stats: {e}")
     return None
 
 
@@ -60,14 +82,15 @@ def _pending_transfers(port: int) -> int:
         return -1  # rc unavailable
     disk_cache = stats.get("diskCache", {})
     return (
-        disk_cache.get("uploadsInProgress", 0) +
-        disk_cache.get("uploadsQueued", 0) +
-        disk_cache.get("downloadsInProgress", 0) +
-        disk_cache.get("downloadsQueued", 0)
+        disk_cache.get("uploadsInProgress", 0)
+        + disk_cache.get("uploadsQueued", 0)
+        + disk_cache.get("downloadsInProgress", 0)
+        + disk_cache.get("downloadsQueued", 0)
     )
 
 
 # ── public ────────────────────────────────────────────────────────────────────
+
 
 def show_status():
     mount_base = _get_mount_base()
@@ -80,7 +103,8 @@ def show_status():
     active_mounts = []
     if os.path.exists(mount_base):
         active_mounts = [
-            d for d in os.listdir(mount_base)
+            d
+            for d in os.listdir(mount_base)
             if os.path.ismount(os.path.join(mount_base, d))
         ]
 
@@ -117,13 +141,17 @@ def show_status():
 
     # ── Sync Pairs ────────────────────────────────────────────────────────────
     MODE_LABELS = {
-        "upload_only":     ("Upload Only",      "green"),
-        "download_only":   ("Download Only",    "green"),
-        "upload_delete":   ("Upload + Delete",  "red"),
-        "download_delete": ("Download + Delete","red"),
-        "two_way":         ("Two-Way",          "red"),
-        "move_to_remote":  ("Move to Remote",   "red"),
-        "move_to_local":   ("Move to Local",    "red"),
+        "upload_only": ("Upload Only", "green"),
+        "download_only": ("Download Only", "green"),
+        "upload_delete": ("Upload + Delete", "red"),
+        "download_delete": ("Download + Delete", "red"),
+        "two_way": ("Two-Way", "red"),
+        "move_to_remote": ("Move to Remote", "red"),
+        "move_to_local": ("Move to Local", "red"),
+        "remote_copy": ("Remote Copy", "green"),
+        "remote_sync_delete": ("Remote Sync + Delete", "red"),
+        "remote_move": ("Remote Move", "red"),
+        "remote_bisync": ("Remote Bisync", "red"),
     }
 
     if sync_pairs:
@@ -131,22 +159,32 @@ def show_status():
         pairs_table.add_column("", width=2)
         pairs_table.add_column("Name", style="bold")
         pairs_table.add_column("Mode")
-        pairs_table.add_column("Local", style="dim")
+        pairs_table.add_column("Source", style="dim")
         pairs_table.add_column("", width=3)
-        pairs_table.add_column("Remote", style="dim")
+        pairs_table.add_column("Destination", style="dim")
 
         for pair in sync_pairs:
             label, color = MODE_LABELS.get(pair["mode"], (pair["mode"], "white"))
+            pair_type = pair.get("type", "local_to_remote")
+            if pair_type == "remote_to_remote":
+                source = pair.get("source", "")
+                destination = pair.get("destination", "")
+            else:
+                source = pair.get("local", "")
+                destination = pair.get("remote", "")
+
             pairs_table.add_row(
                 "▸",
                 pair["name"],
                 f"[{color}]{label}[/{color}]",
-                pair["local"],
+                source,
                 "→",
-                pair["remote"],
+                destination,
             )
 
-        console.print(f"[bold] Sync Pairs[/bold]  [dim]{len(sync_pairs)} configured[/dim]")
+        console.print(
+            f"[bold] Sync Pairs[/bold]  [dim]{len(sync_pairs)} configured[/dim]"
+        )
         console.print(pairs_table)
     else:
         console.print("[bold] Sync Pairs[/bold]  [dim]none configured[/dim]")
