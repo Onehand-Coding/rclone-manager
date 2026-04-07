@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 
 from rich.console import Console
@@ -14,6 +15,7 @@ from .utils import (
 )
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 MODES = {
     # Local to Remote modes
@@ -101,7 +103,14 @@ def _load_pairs() -> list:
     try:
         with open(_config_path()) as f:
             return json.load(f)
-    except Exception:
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in sync-pairs.json: {e}")
+        return []
+    except FileNotFoundError:
+        logger.info("No sync-pairs.json found, starting fresh")
+        return []
+    except Exception as e:
+        logger.error(f"Failed to load sync pairs: {e}")
         return []
 
 
@@ -113,32 +122,25 @@ def _save_pairs(pairs: list):
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 
-def _build_command(pair: dict) -> list:
+def _build_command(pair: dict, dry_run: bool = False) -> list:
     """Build rclone command for a sync pair with filters applied."""
     from .config import PROJECT_ROOT, get_filters, build_filter_args
 
-    # Determine pair type (default to local_to_remote for backward compatibility)
     pair_type = pair.get("type", "local_to_remote")
     mode = pair["mode"]
 
-    # Get paths based on pair type
-    if pair_type == "remote_to_remote":
-        source = pair["source"]
-        destination = pair["destination"]
-    else:  # local_to_remote
-        local = pair["local"]
-        remote = pair["remote"]
+    source = pair.get("source", "")
+    destination = pair.get("destination", "")
+    local = pair.get("local", "")
+    remote = pair.get("remote", "")
 
-    # Get global filters and merge with pair-specific filters
     global_filters = get_filters(PROJECT_ROOT)
     pair_filters = pair.get("filters", {})
 
-    # Merge filters (pair filters extend global filters)
     exclude = global_filters["exclude"] + pair_filters.get("exclude", [])
     include = global_filters["include"] + pair_filters.get("include", [])
     merged_filters = {"exclude": exclude, "include": include}
 
-    # Build base command based on pair type and mode
     if pair_type == "local_to_remote":
         if mode == "upload_only":
             cmd = ["rclone", "copy", local, remote]
@@ -152,8 +154,9 @@ def _build_command(pair: dict) -> list:
             cmd = ["rclone", "bisync", local, remote]
             if not pair.get("bisync_resync_done") or os.name == "nt":
                 cmd.append("--resync")
-            # Note: bisync has its own filter handling
             cmd.extend(build_filter_args(merged_filters))
+            if dry_run:
+                cmd.append("--dry-run")
             return cmd
         elif mode == "move_to_remote":
             cmd = ["rclone", "move", local, remote]
@@ -161,7 +164,7 @@ def _build_command(pair: dict) -> list:
             cmd = ["rclone", "move", remote, local]
         else:
             return []
-    else:  # remote_to_remote
+    else:
         if mode == "remote_copy":
             cmd = ["rclone", "copy", source, destination]
         elif mode == "remote_sync_delete":
@@ -172,13 +175,15 @@ def _build_command(pair: dict) -> list:
             cmd = ["rclone", "bisync", source, destination]
             if not pair.get("bisync_resync_done"):
                 cmd.append("--resync")
-            # Note: bisync has its own filter handling
             cmd.extend(build_filter_args(merged_filters))
+            if dry_run:
+                cmd.append("--dry-run")
             return cmd
         else:
             return []
 
-    # Add filter arguments
+    if dry_run:
+        cmd.append("--dry-run")
     cmd.extend(build_filter_args(merged_filters))
     return cmd
 
@@ -442,7 +447,7 @@ def sync_pairs_list():
     console.print(table)
 
 
-def sync_pairs_run():
+def sync_pairs_run(dry_run: bool = False):
     """Run one or all sync pairs."""
     pairs = _load_pairs()
     if not pairs:
@@ -464,11 +469,11 @@ def sync_pairs_run():
         to_run = [p for p in pairs if p["name"] == selected]
 
     for pair in to_run:
-        if not _confirm_run(pair):
+        if not dry_run and not _confirm_run(pair):
             console.print(f"[dim]Skipped {pair['name']}.[/dim]")
             continue
 
-        command = _build_command(pair)
+        command = _build_command(pair, dry_run=dry_run)
         if not command:
             console.print(
                 f"[red]❌ Unknown mode '{pair['mode']}' for pair {pair['name']}. Skipping.[/red]"
@@ -477,12 +482,22 @@ def sync_pairs_run():
 
         console.print(f"\n[dim]Command: {' '.join(command)}[/dim]")
 
+        if dry_run:
+            console.print("[yellow]🔍 Dry-run mode - no changes will be made[/yellow]")
+            import subprocess
+
+            result = subprocess.run(command, capture_output=True, text=True)
+            if result.stdout:
+                console.print(result.stdout)
+            if result.stderr:
+                console.print(f"[dim]{result.stderr}[/dim]")
+            continue
+
         label = MODES[pair["mode"]]["label"]
         returncode, errors = _run_rclone_with_stats(label, command)
 
         if returncode == 0:
             console.print(f"[green]✅ {pair['name']} completed.[/green]")
-            # Update bisync_resync_done flag for bisync modes
             if pair["mode"] in ["two_way", "remote_bisync"] and not pair.get(
                 "bisync_resync_done"
             ):
@@ -496,7 +511,6 @@ def sync_pairs_run():
             if errors:
                 for e in errors:
                     console.print(f"[red]   {e}[/red]")
-            # Reset bisync_resync_done flag on failure for bisync modes
             if pair["mode"] in ["two_way", "remote_bisync"]:
                 all_pairs = _load_pairs()
                 for p in all_pairs:

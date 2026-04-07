@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import shutil
 import socket
@@ -16,6 +17,7 @@ from .utils import (
 )
 
 console = Console()
+logger = logging.getLogger(__name__)
 
 # Backends that don't support FUSE mount
 UNSUPPORTED_TYPES = ("google-photos", "cloudinary")
@@ -56,8 +58,12 @@ def _rc_stats(port: int) -> dict | None:
         )
         if result.returncode == 0:
             return json.loads(result.stdout)
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Timeout fetching VFS stats from port {port}")
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse VFS stats: {e}")
+    except Exception as e:
+        logger.warning(f"Failed to get VFS stats: {e}")
     return None
 
 
@@ -69,7 +75,13 @@ def _load_registry() -> dict:
     try:
         with open(_registry_path()) as f:
             return json.load(f)
-    except Exception:
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in registry: {e}")
+        return {}
+    except Exception as e:
+        logger.error(f"Failed to load registry: {e}")
         return {}
 
 

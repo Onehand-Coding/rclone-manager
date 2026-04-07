@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 import shutil
@@ -11,6 +12,10 @@ from rich.console import Console
 from rich.prompt import Prompt
 
 console = Console()
+logger = logging.getLogger(__name__)
+
+_remote_list_cache = {"data": None, "timestamp": 0}
+_REMOTE_CACHE_TTL = 60
 
 
 def _toggle_fzf(action: str) -> None:
@@ -32,7 +37,7 @@ def _toggle_fzf(action: str) -> None:
     if action == "status":
         enabled = os.environ.get("USE_FZF", "true").lower() != "false"
         has_fzf = shutil.which("fzf") is not None
-        console.print(f"\n[bold]Fuzzy Search Status[/bold]")
+        console.print("\n[bold]Fuzzy Search Status[/bold]")
         console.print(
             f"  Config  : {'[green]ON[/green]' if enabled else '[yellow]OFF[/yellow]'}"
         )
@@ -102,8 +107,14 @@ def _get_rc_stats(port: int) -> Optional[dict]:
         )
         if result.returncode == 0:
             return json.loads(result.stdout)
-    except Exception:
-        pass
+    except subprocess.TimeoutExpired:
+        logger.warning(f"Timeout fetching stats from port {port}")
+    except json.JSONDecodeError as e:
+        logger.warning(f"Failed to parse stats response: {e}")
+    except FileNotFoundError:
+        logger.error("rclone not found")
+    except Exception as e:
+        logger.warning(f"Failed to get rc stats: {e}")
     return None
 
 
@@ -136,11 +147,11 @@ def _run_rclone_with_stats(
         command,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
-        stdin=subprocess.PIPE if stdin_data else None,
+        stdin=subprocess.PIPE if stdin_data else subprocess.DEVNULL,
         text=True,
     )
 
-    if stdin_data:
+    if stdin_data and proc.stdin:
         proc.stdin.write(stdin_data)
         proc.stdin.close()
 
@@ -148,32 +159,38 @@ def _run_rclone_with_stats(
     with console.status("") as status:
         while proc.poll() is None:
             time.sleep(2)
-            stats = _get_rc_stats(rc_port)
-            if stats:
-                transferred = stats.get("bytes", 0)
-                total_bytes = stats.get("totalBytes", 0)
-                speed = stats.get("speed", 0)
-                transfers = stats.get("transfers", 0)
-                total_transfers = stats.get("totalTransfers", 0)
+            try:
+                stats = _get_rc_stats(rc_port)
+                if stats:
+                    transferred = stats.get("bytes", 0)
+                    total_bytes = stats.get("totalBytes", 0)
+                    speed = stats.get("speed", 0)
+                    transfers = stats.get("transfers", 0)
+                    total_transfers = stats.get("totalTransfers", 0)
 
-                if total_bytes > 0:
-                    mb_transferred = transferred / 1024 / 1024
-                    mb_total = total_bytes / 1024 / 1024
-                    size_str = f"{mb_transferred:.1f} MB / {mb_total:.1f} MB"
+                    if total_bytes > 0:
+                        mb_transferred = transferred / 1024 / 1024
+                        mb_total = total_bytes / 1024 / 1024
+                        size_str = f"{mb_transferred:.1f} MB / {mb_total:.1f} MB"
+                    else:
+                        mb_transferred = transferred / 1024 / 1024
+                        size_str = f"{mb_transferred:.1f} MB"
+
+                    speed_mb = speed / 1024 / 1024
+
+                    if total_transfers > 0:
+                        status.update(
+                            f"[dim]{label} {transfers}/{total_transfers} files  "
+                            f"{speed_mb:.1f} MB/s  {size_str}[/dim]"
+                        )
+                    else:
+                        status.update(
+                            f"[dim]{label} {speed_mb:.1f} MB/s  {size_str}[/dim]"
+                        )
                 else:
-                    mb_transferred = transferred / 1024 / 1024
-                    size_str = f"{mb_transferred:.1f} MB"
-
-                speed_mb = speed / 1024 / 1024
-
-                if total_transfers > 0:
-                    status.update(
-                        f"[dim]{label} {transfers}/{total_transfers} files  "
-                        f"{speed_mb:.1f} MB/s  {size_str}[/dim]"
-                    )
-                else:
-                    status.update(f"[dim]{label} {speed_mb:.1f} MB/s  {size_str}[/dim]")
-            else:
+                    status.update(f"[dim]{label} running...[/dim]")
+            except Exception as e:
+                logger.warning(f"Error getting stats: {e}")
                 status.update(f"[dim]{label} running...[/dim]")
 
     _, stderr = proc.communicate()
@@ -193,7 +210,8 @@ def get_ip_address() -> str:
     try:
         s.connect(("10.255.255.255", 1))
         IP = s.getsockname()[0]
-    except Exception:
+    except OSError as e:
+        logger.warning(f"Failed to get IP address: {e}")
         IP = "127.0.0.1"
     finally:
         s.close()
@@ -203,14 +221,32 @@ def get_ip_address() -> str:
 def list_rclone_remotes() -> List[str]:
     """
     Returns a list of all rclone remotes, filtering out remotes ending in '-shared'.
+    Uses caching to avoid repeated subprocess calls.
     """
+    global _remote_list_cache
+    current_time = time.time()
+
+    if (
+        _remote_list_cache["data"] is not None
+        and current_time - _remote_list_cache["timestamp"] < _REMOTE_CACHE_TTL
+    ):
+        return _remote_list_cache["data"]
+
     try:
         output = subprocess.check_output(["rclone", "listremotes"]).decode("utf-8")
         remotes = [line.strip().replace(":", "") for line in output.strip().split("\n")]
-        return [r for r in remotes if not r.endswith("-shared")]
+        result = [r for r in remotes if not r.endswith("-shared")]
+        _remote_list_cache = {"data": result, "timestamp": current_time}
+        return result
     except FileNotFoundError:
         console.print("[bold red]rclone not found. Please install it.[/bold red]")
         return []
+
+
+def clear_remote_cache() -> None:
+    """Clear the cached remote list."""
+    global _remote_list_cache
+    _remote_list_cache = {"data": None, "timestamp": 0}
 
 
 def get_remote_type(remote: str) -> str:
@@ -223,7 +259,7 @@ def get_remote_type(remote: str) -> str:
         ).decode("utf-8")
         match = re.search(r"type\s*=\s*(.*)", output)
         if match:
-            return match.group(1).strip()
+            return match.group(1).strip().lower()
         return ""
     except subprocess.CalledProcessError:
         return ""
@@ -233,8 +269,77 @@ def get_rclone_flags(remote_type: str) -> List[str]:
     """
     Returns a list of rclone flags for a given remote type.
     """
-    flags = os.environ.get(f"RCLONE_FLAGS_{remote_type.upper()}", "")
+    if not remote_type:
+        return []
+    flags = os.environ.get(f"RCLONE_FLAGS_{remote_type.lower().upper()}", "")
     return flags.split()
+
+
+def run_rclone_with_retry(
+    command: List[str],
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+) -> subprocess.CompletedProcess:
+    """
+    Run an rclone command with retry logic for transient failures.
+
+    Args:
+        command: The rclone command to execute
+        max_retries: Maximum number of retry attempts
+        base_delay: Base delay in seconds (exponential backoff)
+
+    Returns:
+        CompletedProcess result
+
+    Raises:
+        subprocess.CalledProcessError: If all retries fail
+    """
+    last_exception = None
+
+    for attempt in range(max_retries):
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+            if result.returncode == 0:
+                return result
+
+            error_msg = result.stderr.lower()
+            retryable_errors = [
+                "connection reset",
+                "connection refused",
+                "timeout",
+                "temporary failure",
+                "network",
+                "i/o timeout",
+            ]
+
+            if any(err in error_msg for err in retryable_errors):
+                if attempt < max_retries - 1:
+                    delay = base_delay * (2**attempt)
+                    logger.warning(
+                        f"Transient error, retrying in {delay}s (attempt {attempt + 1}/{max_retries})"
+                    )
+                    time.sleep(delay)
+                    continue
+
+            return result
+
+        except subprocess.TimeoutExpired as e:
+            last_exception = e
+            logger.warning(f"Command timeout (attempt {attempt + 1}/{max_retries})")
+        except OSError as e:
+            last_exception = e
+            logger.warning(f"OS error: {e} (attempt {attempt + 1}/{max_retries})")
+
+        if attempt < max_retries - 1:
+            delay = base_delay * (2**attempt)
+            time.sleep(delay)
+
+    raise subprocess.CalledProcessError(1, command, stderr=str(last_exception))
 
 
 def choose_from_list(

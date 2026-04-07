@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+from typing import Optional
 from pathlib import Path
 from rich.logging import RichHandler
 from configparser import ConfigParser
@@ -24,6 +25,17 @@ except FileNotFoundError as e:
     sys.exit(1)
 
 
+DEFAULTS = {
+    "LOG_LEVEL": "INFO",
+    "LOG_FILE": "logs/rclone_scripts.log",
+    "DEFAULT_PORT": "8080",
+    "USERNAME": "user",
+    "PASSWORD": "pass",
+    "INCLUDE_HIDDEN": "false",
+    "USE_FZF": "true",
+}
+
+
 def setup_env(root_dir: str):
     """
     Sets up the environment variables from the config.ini file.
@@ -32,6 +44,8 @@ def setup_env(root_dir: str):
     config_path = os.path.join(root_dir, "configs", "config.ini")
 
     if not os.path.exists(config_path):
+        for key, value in DEFAULTS.items():
+            os.environ.setdefault(key, value)
         return
 
     config.read(config_path)
@@ -39,14 +53,15 @@ def setup_env(root_dir: str):
     # Process the [DEFAULT] section explicitly, as it's not in config.sections()
     if "DEFAULT" in config:
         for key, value in config["DEFAULT"].items():
-            os.environ[key.upper()] = value
+            env_key = f"RMAN_{key.upper()}"
+            os.environ[env_key] = value
+            if key.upper() in DEFAULTS:
+                os.environ[key.upper()] = value
 
     # Process all other named sections like [rclone_flags]
     for section_name in config.sections():
-        # Get the items specifically from this section
         section_items = config.items(section_name)
         for key, value in section_items:
-            # Create an environment variable like RCLONE_FLAGS_MEGA
             os.environ[f"{section_name.upper()}_{key.upper()}"] = value
 
 
@@ -72,10 +87,10 @@ def setup_logging():
     )
 
 
-def get_filters(root_dir: str = None) -> dict:
+def get_filters(root_dir: Optional[str] = None) -> dict:
     """
     Load exclude/include filters from config.ini.
-    
+
     Returns a dict with 'exclude' and 'include' lists of patterns.
     """
     if root_dir is None:
@@ -83,39 +98,39 @@ def get_filters(root_dir: str = None) -> dict:
             root_dir = PROJECT_ROOT
         except Exception:
             return {"exclude": [], "include": []}
-    
+
     config_path = os.path.join(root_dir, "configs", "config.ini")
     filters = {"exclude": [], "include": []}
-    
+
     if not os.path.exists(config_path):
         return filters
-    
+
     config = ConfigParser()
     config.read(config_path)
-    
+
     if "filters" not in config:
         return filters
-    
+
     # Parse exclude patterns
     if "exclude" in config["filters"]:
         exclude_str = config["filters"]["exclude"]
         # Split by newlines and clean up each pattern
         patterns = [p.strip() for p in exclude_str.strip().split("\n") if p.strip()]
         filters["exclude"] = patterns
-    
+
     # Parse include patterns
     if "include" in config["filters"]:
         include_str = config["filters"]["include"]
         patterns = [p.strip() for p in include_str.strip().split("\n") if p.strip()]
         filters["include"] = patterns
-    
+
     return filters
 
 
 def build_filter_args(filters: dict) -> list:
     """
     Convert filter dict to rclone command-line arguments.
-    
+
     Auto-excludes hidden files and directories unless INCLUDE_HIDDEN=true.
     Hidden exclusion is applied first so user filters can override with --include.
     """

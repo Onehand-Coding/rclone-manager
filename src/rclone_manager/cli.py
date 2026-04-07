@@ -122,6 +122,11 @@ def main():
         choices=["add", "list", "run", "remove"],
         help="Action to perform (optional, interactive if omitted)",
     )
+    sync_pairs_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be transferred without making any changes",
+    )
     subparsers.add_parser("status", help="Show active mounts and sync pairs")
 
     subparsers.add_parser("filters", help="Manage global exclude/include filters")
@@ -181,7 +186,7 @@ def main():
                 elif args.action == "list":
                     sync_pairs_list()
                 elif args.action == "run":
-                    sync_pairs_run()
+                    sync_pairs_run(dry_run=args.dry_run)
                 elif args.action == "remove":
                     sync_pairs_remove()
             else:
@@ -191,7 +196,7 @@ def main():
         elif args.command == "filters":
             manage_filters()
         elif args.command == "fzf":
-            from .utils import _fzf_available, _toggle_fzf
+            from .utils import _toggle_fzf
 
             action = args.action or "status"
             _toggle_fzf(action)
