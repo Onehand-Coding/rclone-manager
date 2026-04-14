@@ -28,7 +28,9 @@ UNSUPPORTED_NAMES = ("gphotos", "google photos", "cloudinary")
 
 
 def _get_mount_base() -> str:
-    return os.path.expanduser(os.environ.get("MOUNT_DIR", "~/mnt"))
+    return os.path.expanduser(
+        os.environ.get("RMAN_MOUNT_DIR", os.environ.get("MOUNT_DIR", "~/mnt"))
+    )
 
 
 def _fusermount_cmd() -> str:

@@ -15,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 def _get_mount_base() -> str:
-    return os.path.expanduser(os.environ.get("MOUNT_DIR", "~/mnt"))
+    return os.path.expanduser(
+        os.environ.get("RMAN_MOUNT_DIR", os.environ.get("MOUNT_DIR", "~/mnt"))
+    )
 
 
 def _registry_path() -> str:
