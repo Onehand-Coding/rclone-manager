@@ -82,7 +82,7 @@ def _run_fzf(items: List[str], prompt: str = "", multi: bool = False) -> List[st
         fzf_cmd, input="\n".join(items), capture_output=True, text=True
     )
 
-    if proc.returncode != 0:
+    if proc.returncode not in (0, 1):
         return []
 
     return [line for line in proc.stdout.strip().split("\n") if line]
@@ -193,11 +193,14 @@ def _run_rclone_with_stats(
                 logger.warning(f"Error getting stats: {e}")
                 status.update(f"[dim]{label} running...[/dim]")
 
-    _, stderr = proc.communicate()
-    if stderr:
-        errors = [line for line in stderr.strip().splitlines() if "ERROR" in line]
-        if not errors and proc.returncode != 0:
-            errors = stderr.strip().splitlines()[-5:]
+    if proc.returncode != 0:
+        stderr = proc.stderr.read() if proc.stderr else ""
+        if stderr:
+            errors = [line for line in stderr.strip().splitlines() if "ERROR" in line]
+            if not errors:
+                errors = stderr.strip().splitlines()[-5:]
+    else:
+        stderr = ""
 
     return proc.returncode, errors
 
@@ -406,12 +409,15 @@ def choose_from_list(
         return selected_items[0] if len(selected_items) == 1 else selected_items
 
 
-def navigate_local_file_system(purpose: str = None) -> Union[List[str], str, None]:
+def navigate_local_file_system(
+    purpose: Optional[str] = None, single_only: bool = False
+) -> Union[List[str], str, None]:
     """
     Allows the user to navigate the local file system and select files or a directory.
 
     Args:
         purpose: Optional description of what is being selected (e.g., "local folder", "source directory")
+        single_only: If True, only allow single selection (no multi-select)
     """
     current_dir = os.path.expanduser("~")
     while True:
@@ -437,10 +443,38 @@ def navigate_local_file_system(purpose: str = None) -> Union[List[str], str, Non
                 display_items.append(".. (go up)")
                 display_items.append(f". (select this {purpose or 'directory'})")
 
-                selected = _run_fzf(display_items, prompt=f"📂 {current_dir} > ")
+                selected = _run_fzf(
+                    display_items, prompt=f"📂 {current_dir} > ", multi=not single_only
+                )
                 if not selected:
                     console.print("[dim]Cancelled.[/dim]")
                     return None
+
+                selected_items = [
+                    s
+                    for s in selected
+                    if s
+                    not in (".. (go up)", f". (select this {purpose or 'directory'})")
+                ]
+
+                if len(selected_items) > 1:
+                    result_paths = []
+                    dirs_to_navigate = []
+                    for item in selected_items:
+                        name = item[2:].rstrip("/")
+                        full_path = os.path.join(current_dir, name)
+                        if name in dirs:
+                            dirs_to_navigate.append(name)
+                        else:
+                            result_paths.append(full_path)
+                    if dirs_to_navigate:
+                        if len(dirs_to_navigate) == 1 and not result_paths:
+                            current_dir = os.path.join(current_dir, dirs_to_navigate[0])
+                            continue
+                        else:
+                            for d in dirs_to_navigate:
+                                result_paths.append(os.path.join(current_dir, d))
+                    return result_paths if len(result_paths) > 1 else result_paths[0]
 
                 choice = selected[0]
                 if choice == ".. (go up)":
@@ -501,7 +535,7 @@ def navigate_local_file_system(purpose: str = None) -> Union[List[str], str, Non
 
 
 def navigate_remote_file_system(
-    remote: str, purpose: str = None
+    remote: str, purpose: Optional[str] = None, single_only: bool = False
 ) -> Union[List[str], str, None]:
     """
     Allows the user to navigate a remote file system and select one or more files/directories.
@@ -509,6 +543,7 @@ def navigate_remote_file_system(
     Args:
         remote: The remote name to navigate
         purpose: Optional description of what is being selected (e.g., "destination path", "source files")
+        single_only: If True, only allow single selection (no multi-select)
     """
     current_path = f"{remote}:"
     while True:
@@ -529,10 +564,39 @@ def navigate_remote_file_system(
                 display_items.append(".. (go up)")
                 display_items.append(f". (select this {purpose or 'path'})")
 
-                selected = _run_fzf(display_items, prompt=f"📂 {current_path} > ")
+                selected = _run_fzf(
+                    display_items, prompt=f"📂 {current_path} > ", multi=True
+                )
                 if not selected:
                     console.print("[dim]Cancelled.[/dim]")
                     return None
+
+                selected_items = [
+                    s
+                    for s in selected
+                    if s not in (".. (go up)", f". (select this {purpose or 'path'})")
+                ]
+
+                if len(selected_items) > 1:
+                    result_paths = []
+                    dirs_to_navigate = []
+                    for item in selected_items:
+                        name = item[2:].rstrip("/")
+                        full_path = current_path.rstrip("/") + "/" + name
+                        if name.endswith("/"):
+                            dirs_to_navigate.append(name)
+                        else:
+                            result_paths.append(full_path)
+                    if dirs_to_navigate:
+                        if len(dirs_to_navigate) == 1 and not result_paths:
+                            current_path = (
+                                current_path.rstrip("/") + "/" + dirs_to_navigate[0]
+                            )
+                            continue
+                        else:
+                            for d in dirs_to_navigate:
+                                result_paths.append(current_path.rstrip("/") + "/" + d)
+                    return result_paths if len(result_paths) > 1 else result_paths[0]
 
                 choice = selected[0]
                 if choice == ".. (go up)":

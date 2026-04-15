@@ -240,8 +240,15 @@ def upload_backup(overwrite: bool = False):
     console.print(
         "\n[bold cyan]-- Step 3: Select Remote Destination Folder --[/bold cyan]"
     )
-    remote_dir = navigate_remote_file_system(remote, purpose="destination folder")
+    remote_dir = navigate_remote_file_system(
+        remote, purpose="destination folder", single_only=True
+    )
+    if not remote_dir:
+        return
+
     # Ensure the remote path is treated as a directory
+    if isinstance(remote_dir, list):
+        remote_dir = remote_dir[0]
     if not remote_dir.endswith("/"):
         remote_dir = remote_dir.strip("/") + "/"
 
@@ -269,28 +276,19 @@ def upload_backup(overwrite: bool = False):
         console.print("[yellow]Overwrite mode enabled.[/yellow]")
         base_command.append("--ignore-times")
 
-    # Add filter arguments to command
-    base_command.extend(filter_args)
-
     if isinstance(local_selection, str):
-        # If it's a single item (file or directory), copy it directly.
-        # rclone handles whether it's a file or directory correctly.
+        base_command.extend(filter_args)
         command = base_command + [local_selection, remote_dir]
         label = f"Uploading {os.path.basename(local_selection)}"
         returncode, errors = _run_rclone_with_stats(label, command)
     else:
-        # If it's a list of files, we must use the '--files-from' flag
-        # This is more efficient than running 'rclone copy' for every single file.
         files_to_upload_list = local_selection
 
-        # We need to get the directory that these files are in
         base_dir = os.path.dirname(files_to_upload_list[0])
-        # And just the filenames themselves
         file_names = [os.path.basename(f) for f in files_to_upload_list]
 
         console.print(f"Uploading {len(file_names)} files from {base_dir}...")
 
-        # Use '--files-from' with '-' to read from stdin
         command = base_command + [
             "--files-from",
             "-",
@@ -342,8 +340,15 @@ def download_backup(overwrite: bool = False):
     console.print(
         "\n[bold cyan]-- Step 3: Select Local Destination Folder --[/bold cyan]"
     )
-    local_dir = navigate_local_file_system(purpose="destination folder")
-    if not local_dir or os.path.isfile(local_dir):
+    local_dir = navigate_local_file_system(
+        purpose="destination folder", single_only=True
+    )
+    if not local_dir:
+        return
+
+    if isinstance(local_dir, list):
+        local_dir = local_dir[0]
+    if os.path.isfile(local_dir):
         console.print("[red]Invalid destination. You must select a directory.[/red]")
         return
 
@@ -371,10 +376,8 @@ def download_backup(overwrite: bool = False):
         console.print("[yellow]Overwrite mode enabled (ignoring timestamps).[/yellow]")
         base_command.append("--ignore-times")
 
-    # Add filter arguments to command
-    base_command.extend(filter_args)
-
     if isinstance(remote_selection, str):
+        base_command.extend(filter_args)
         console.print(
             f"Downloading {os.path.basename(remote_selection.rstrip('/'))} to {local_dir}..."
         )
@@ -388,7 +391,7 @@ def download_backup(overwrite: bool = False):
             failed_items = []
             for item in files_to_download_list:
                 console.print(f"Downloading 📄 {os.path.basename(item.rstrip('/'))}...")
-                command = base_command + [item, local_dir]
+                command = base_command + filter_args + [item, local_dir]
                 label = f"Downloading {os.path.basename(item.rstrip('/'))}"
                 rc, errs = _run_rclone_with_stats(label, command)
                 if rc != 0:
