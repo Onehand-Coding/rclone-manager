@@ -1,8 +1,6 @@
 import json
 import logging
 import os
-import subprocess
-import sys
 
 from rich.table import Table
 from rich import box
@@ -11,7 +9,6 @@ from .ports import OutputPort, RichOutput
 from .utils import (
     _is_windows,
     _get_mount_base,
-    _registry_path,
     _load_registry,
     _rc_vfs_stats,
 )

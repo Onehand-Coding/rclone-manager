@@ -1,6 +1,4 @@
-import os
 
-import pytest
 from rclone_manager.ports import CommandResult
 
 # All patching uses string paths to target the correct module-level name bindings

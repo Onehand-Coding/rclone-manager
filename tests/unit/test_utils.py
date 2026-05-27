@@ -1,7 +1,4 @@
-import os
-import socket
 import subprocess
-from unittest.mock import ANY
 
 import pytest
 from rclone_manager.ports import CommandResult

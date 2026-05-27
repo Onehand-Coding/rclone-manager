@@ -1,7 +1,5 @@
 import os
-import subprocess
 
-import pytest
 from rclone_manager.ports import CommandResult
 
 

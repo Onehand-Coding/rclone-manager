@@ -21,7 +21,6 @@ class TestArgParse:
         monkeypatch.setattr(cli, "generate_default_config", lambda: called.append(True))
         monkeypatch.setattr(cli, "get_project_root", lambda: "/tmp")
         monkeypatch.setattr(cli, "setup_env", lambda root: None)
-        import argparse
         import sys
 
         old_argv = sys.argv

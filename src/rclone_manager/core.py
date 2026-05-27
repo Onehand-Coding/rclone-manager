@@ -10,7 +10,6 @@ from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
 from .utils import (
     _run_rclone_with_stats,
     choose_from_list,
-    get_ip_address,
     get_remote_type,
     get_rclone_flags,
     navigate_local_file_system,

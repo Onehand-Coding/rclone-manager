@@ -42,3 +42,7 @@ addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source = ["src"]
+
+[tool.ruff.lint]
+select = ["F", "E", "W"]
+ignore = ["E501"]

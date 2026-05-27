@@ -1,7 +1,6 @@
 import json
 import os
 
-import pytest
 
 
 class TestHelpers:
@@ -48,7 +47,6 @@ class TestShowStatus:
     def test_shows_no_mounts_and_no_pairs(self, monkeypatch, test_output, tmp_path):
         import rclone_manager.config
         from rclone_manager import status
-        from rclone_manager.ports import TestOutput
 
         monkeypatch.setattr(rclone_manager.config, "get_project_root", lambda: str(tmp_path))
         monkeypatch.setattr(status, "console", test_output)
