@@ -64,6 +64,13 @@ def setup_env(root_dir: str):
         for key, value in section_items:
             os.environ[f"{section_name.upper()}_{key.upper()}"] = value
 
+    # Restrict permissions on config file to owner-only
+    if os.name != "nt" and os.path.exists(config_path):
+        try:
+            os.chmod(config_path, 0o600)
+        except OSError:
+            pass
+
 
 def setup_logging():
     """

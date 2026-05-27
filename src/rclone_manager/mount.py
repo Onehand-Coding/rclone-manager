@@ -88,6 +88,13 @@ def _save_registry(registry: dict):
     with open(path, "w") as f:
         json.dump(registry, f, indent=2)
 
+    # Restrict permissions to owner-only
+    if os.name != "nt":
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+
 
 def _remove_from_registry(name: str):
     registry = _load_registry()
