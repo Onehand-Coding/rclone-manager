@@ -4,11 +4,12 @@ import os
 import subprocess
 import sys
 
-from rich.console import Console
 from rich.table import Table
 from rich import box
 
-console = Console()
+from .ports import OutputPort, RichOutput
+
+console: OutputPort = RichOutput()
 logger = logging.getLogger(__name__)
 
 
@@ -54,9 +55,9 @@ def _load_registry() -> dict:
 
 def _sync_pairs_path() -> str:
     """Get the path to sync-pairs.json in the project's configs directory."""
-    from .config import PROJECT_ROOT
+    from .config import get_project_root
 
-    return os.path.join(PROJECT_ROOT, "configs", "sync-pairs.json")
+    return os.path.join(get_project_root(), "configs", "sync-pairs.json")
 
 
 def _load_sync_pairs() -> list:

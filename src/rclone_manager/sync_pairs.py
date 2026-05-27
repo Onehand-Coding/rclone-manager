@@ -2,9 +2,10 @@ import json
 import logging
 import os
 
-from rich.console import Console
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Confirm
 from rich.table import Table
+
+from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
 
 from .utils import (
     _run_rclone_with_stats,
@@ -14,7 +15,8 @@ from .utils import (
     navigate_remote_file_system,
 )
 
-console = Console()
+console: OutputPort = RichOutput()
+_runner: CommandRunner = RealCommandRunner()
 logger = logging.getLogger(__name__)
 
 MODES = {
@@ -94,9 +96,9 @@ MODES = {
 
 def _config_path() -> str:
     """Get the path to sync-pairs.json in the project's configs directory."""
-    from .config import PROJECT_ROOT
+    from .config import get_project_root
 
-    return os.path.join(PROJECT_ROOT, "configs", "sync-pairs.json")
+    return os.path.join(get_project_root(), "configs", "sync-pairs.json")
 
 
 def _load_pairs() -> list:
@@ -124,7 +126,7 @@ def _save_pairs(pairs: list):
 
 def _build_command(pair: dict, dry_run: bool = False) -> list:
     """Build rclone command for a sync pair with filters applied."""
-    from .config import PROJECT_ROOT, get_filters, build_filter_args
+    from .config import get_project_root, get_filters, build_filter_args
 
     pair_type = pair.get("type", "local_to_remote")
     mode = pair["mode"]
@@ -134,7 +136,8 @@ def _build_command(pair: dict, dry_run: bool = False) -> list:
     local = pair.get("local", "")
     remote = pair.get("remote", "")
 
-    global_filters = get_filters(PROJECT_ROOT)
+    root = get_project_root()
+    global_filters = get_filters(root)
     pair_filters = pair.get("filters", {})
 
     exclude = global_filters["exclude"] + pair_filters.get("exclude", [])
@@ -225,7 +228,7 @@ def sync_pairs_add():
 
     # Step 1: Name
     console.print("\n[bold cyan]-- Step 1: Enter Pair Name --[/bold cyan]")
-    name = Prompt.ask("Pair name (e.g. Work Docs, Drive to Mega Backup)")
+    name = console.input("Pair name (e.g. Work Docs, Drive to Mega Backup)")
     if not name:
         return
 
@@ -343,7 +346,7 @@ def sync_pairs_add():
         "\n[dim]Add pair-specific exclude patterns? (comma-separated, or skip)[/dim]"
     )
     console.print("[dim]Examples: *.log, temp/, drafts/[/dim]")
-    exclude_input = Prompt.ask("Exclude patterns", default="")
+    exclude_input = console.input("Exclude patterns")
 
     pair_filters = {}
     if exclude_input.strip():
@@ -355,7 +358,7 @@ def sync_pairs_add():
         "\n[dim]Add pair-specific include patterns? (comma-separated, or skip)[/dim]"
     )
     console.print("[dim]Examples: important/*, projects/*.pdf[/dim]")
-    include_input = Prompt.ask("Include patterns", default="")
+    include_input = console.input("Include patterns")
 
     if include_input.strip():
         patterns = [p.strip() for p in include_input.split(",") if p.strip()]
@@ -484,9 +487,8 @@ def sync_pairs_run(dry_run: bool = False):
 
         if dry_run:
             console.print("[yellow]🔍 Dry-run mode - no changes will be made[/yellow]")
-            import subprocess
 
-            result = subprocess.run(command, capture_output=True, text=True)
+            result = _runner.run(command, capture_output=True, text=True)
             if result.stdout:
                 console.print(result.stdout)
             if result.stderr:

@@ -8,22 +8,38 @@ import subprocess
 import time
 from typing import List, Union, Optional
 
-from rich.console import Console
-from rich.prompt import Prompt
+from .ports import CommandRunner, CommandResult, OutputPort, RealCommandRunner, RichOutput
 
-console = Console()
+console: OutputPort = RichOutput()
+_runner: CommandRunner = RealCommandRunner()
 logger = logging.getLogger(__name__)
 
 _remote_list_cache = {"data": None, "timestamp": 0}
 _REMOTE_CACHE_TTL = 60
 
 
+def sanitize_command(cmd: list) -> list:
+    """Redact sensitive values (pass, token, secret, key, auth) from command args."""
+    safe = []
+    for arg in cmd:
+        lower = arg.lower()
+        if any(s in lower for s in ("pass", "token", "secret", "key", "auth")):
+            if "=" in arg:
+                key, _ = arg.split("=", 1)
+                safe.append(f"{key}=***REDACTED***")
+            else:
+                safe.append("***REDACTED***")
+        else:
+            safe.append(arg)
+    return safe
+
+
 def _toggle_fzf(action: str) -> None:
     """Toggle fzf on/off by writing USE_FZF to config.ini."""
-    from .config import PROJECT_ROOT
+    from .config import get_project_root
     from configparser import ConfigParser
 
-    config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
+    config_path = os.path.join(get_project_root(), "configs", "config.ini")
 
     if not os.path.exists(config_path):
         console.print(
@@ -78,14 +94,14 @@ def _run_fzf(items: List[str], prompt: str = "", multi: bool = False) -> List[st
     if multi:
         fzf_cmd.append("-m")
 
-    proc = subprocess.run(
+    result = _runner.run(
         fzf_cmd, input="\n".join(items), capture_output=True, text=True
     )
 
-    if proc.returncode not in (0, 1):
+    if result.returncode not in (0, 1):
         return []
 
-    return [line for line in proc.stdout.strip().split("\n") if line]
+    return [line for line in result.stdout.strip().split("\n") if line]
 
 
 def _get_rc_stats(port: int) -> Optional[dict]:
@@ -99,7 +115,7 @@ def _get_rc_stats(port: int) -> Optional[dict]:
         Dict with stats (bytes, totalBytes, speed, transfers, totalTransfers) or None if unavailable
     """
     try:
-        result = subprocess.run(
+        result = _runner.run(
             ["rclone", "rc", "core/stats", f"--rc-addr=127.0.0.1:{port}"],
             capture_output=True,
             text=True,
@@ -143,7 +159,7 @@ def _run_rclone_with_stats(
     """
     command = command + ["--rc", f"--rc-addr=127.0.0.1:{rc_port}"]
 
-    proc = subprocess.Popen(
+    proc = _runner.popen(
         command,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
@@ -236,7 +252,7 @@ def list_rclone_remotes() -> List[str]:
         return _remote_list_cache["data"]
 
     try:
-        output = subprocess.check_output(["rclone", "listremotes"]).decode("utf-8")
+        output = _runner.check_output(["rclone", "listremotes"])
         remotes = [line.strip().replace(":", "") for line in output.strip().split("\n")]
         result = [r for r in remotes if not r.endswith("-shared")]
         _remote_list_cache = {"data": result, "timestamp": current_time}
@@ -257,9 +273,9 @@ def get_remote_type(remote: str) -> str:
     Returns the type of a given rclone remote.
     """
     try:
-        output = subprocess.check_output(
+        output = _runner.check_output(
             ["rclone", "config", "show", f"{remote}:"]
-        ).decode("utf-8")
+        )
         match = re.search(r"type\s*=\s*(.*)", output)
         if match:
             return match.group(1).strip().lower()
@@ -282,7 +298,7 @@ def run_rclone_with_retry(
     command: List[str],
     max_retries: int = 3,
     base_delay: float = 1.0,
-) -> subprocess.CompletedProcess:
+    ) -> CommandResult:
     """
     Run an rclone command with retry logic for transient failures.
 
@@ -301,7 +317,7 @@ def run_rclone_with_retry(
 
     for attempt in range(max_retries):
         try:
-            result = subprocess.run(
+            result = _runner.run(
                 command,
                 capture_output=True,
                 text=True,
@@ -382,7 +398,7 @@ def choose_from_list(
             display_item = f"{item}/" if item.endswith("/") else item
             console.print(f"{i + 1}. {display_item}")
 
-        choices_str = Prompt.ask(f"[yellow]{message}[/yellow]")
+        choices_str = console.input(f"[yellow]{message}[/yellow]")
 
         if allow_quit and choices_str and choices_str.lower() in ["q", "quit"]:
             console.print("[dim]Cancelled.[/dim]")
@@ -503,7 +519,7 @@ def navigate_local_file_system(
                     prompt = f"[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this {purpose}, 'q' to quit.[/yellow]"
                 else:
                     prompt = "[yellow]Navigate by number, '..' (up), or select items (e.g., 1 or 2,3). Press '.' or 'd' to select this directory, 'q' to quit.[/yellow]"
-                choice = Prompt.ask(prompt)
+                choice = console.input(prompt)
 
                 if choice and choice.lower() in ["q", "quit"]:
                     console.print("[dim]Cancelled.[/dim]")
@@ -549,9 +565,9 @@ def navigate_remote_file_system(
     while True:
         try:
             with console.status("[dim]Loading...[/dim]"):
-                output = subprocess.check_output(
+                output = _runner.check_output(
                     ["rclone", "lsf", current_path]
-                ).decode("utf-8")
+                )
             items = sorted(output.strip().split("\n")) if output.strip() else []
 
             if _fzf_available():
@@ -632,7 +648,7 @@ def navigate_remote_file_system(
                     prompt = f"[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this {purpose}, 'q' to quit.[/yellow]"
                 else:
                     prompt = "[yellow]Navigate (number), go up (..), or select items (e.g., 1,2). Press '.' or 'd' to select this path, 'q' to quit.[/yellow]"
-                choice = Prompt.ask(prompt)
+                choice = console.input(prompt)
 
                 if choice and choice.lower() in ["q", "quit"]:
                     console.print("[dim]Cancelled.[/dim]")

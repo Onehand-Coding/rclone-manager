@@ -7,17 +7,18 @@ import subprocess
 import sys
 import time
 
-from rich.console import Console
-from rich.prompt import Prompt
+from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
 
 from .utils import (
     choose_from_list,
     get_remote_type,
     get_rclone_flags,
     list_rclone_remotes,
+    sanitize_command,
 )
 
-console = Console()
+console: OutputPort = RichOutput()
+_runner: CommandRunner = RealCommandRunner()
 logger = logging.getLogger(__name__)
 
 # Backends that don't support FUSE mount
@@ -74,7 +75,7 @@ def _get_registry_entry(registry: dict, name: str) -> tuple:
 def _unmount_via_rc(rc_port: int, mount_point: str) -> bool:
     """Try to unmount via rclone rc API. Works cross-platform."""
     try:
-        result = subprocess.run(
+        result = _runner.run(
             ["rclone", "rc", "mount/unmount", f"--rc-addr=127.0.0.1:{rc_port}",
              f"mountPoint={mount_point}"],
             capture_output=True, text=True, timeout=10,
@@ -90,7 +91,7 @@ def _unmount_via_rc(rc_port: int, mount_point: str) -> bool:
 def _rc_stats(port: int) -> dict | None:
     """Query rclone rc vfs/stats. Returns dict or None if unavailable."""
     try:
-        result = subprocess.run(
+        result = _runner.run(
             ["rclone", "rc", "vfs/stats", f"--rc-addr=127.0.0.1:{port}"],
             capture_output=True,
             text=True,
@@ -169,10 +170,8 @@ def _check_pending_uploads(port: int, name: str) -> str:
         f"\n[bold yellow]⚠️  {name} has {pending} transfer(s) still pending "
         f"({in_progress} in progress, {queued} queued).[/bold yellow]"
     )
-    choice = Prompt.ask(
-        "What would you like to do?",
-        choices=["wait", "force", "cancel"],
-        default="wait",
+    choice = console.input(
+        "What would you like to do?"
     )
 
     if choice == "cancel":
@@ -292,9 +291,9 @@ def mount_remote():
         console.print(
             f"\n[green]Mounting [bold]{remote}[/bold] → {mount_point}[/green]"
         )
-        console.print(f"[dim]Command: {' '.join(command)}[/dim]")
+        console.print(f"[dim]Command: {' '.join(sanitize_command(command))}[/dim]")
 
-        proc = subprocess.Popen(command)
+        proc = _runner.popen(command)
 
         # Poll until mounted or process dies
         mounted = False
@@ -392,7 +391,7 @@ def unmount_remote():
         if not unmounted:
             if _is_windows():
                 if pid:
-                    result = subprocess.run(
+                    result = _runner.run(
                         ["taskkill", "/F", "/PID", str(pid)],
                         capture_output=True, text=True,
                     )
@@ -412,7 +411,7 @@ def unmount_remote():
                     )
             else:
                 # Unix: fusermount
-                result = subprocess.run(
+                result = _runner.run(
                     [fusermount, "-u", mp], capture_output=True, text=True
                 )
                 if result.returncode == 0:
@@ -425,7 +424,7 @@ def unmount_remote():
                         f"[yellow]⚠️  Clean unmount failed: {error}. "
                         f"Trying lazy unmount...[/yellow]"
                     )
-                    lazy = subprocess.run(
+                    lazy = _runner.run(
                         [fusermount, "-uz", mp], capture_output=True, text=True
                     )
                     if lazy.returncode == 0:

@@ -5,10 +5,8 @@ import subprocess
 import threading
 from configparser import ConfigParser
 
-from rich.prompt import Prompt
-from rich.console import Console
-
-from .config import PROJECT_ROOT
+from .config import get_project_root
+from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
 from .utils import (
     _run_rclone_with_stats,
     choose_from_list,
@@ -18,9 +16,11 @@ from .utils import (
     navigate_local_file_system,
     navigate_remote_file_system,
     list_rclone_remotes,
+    sanitize_command,
 )
 
-console = Console()
+console: OutputPort = RichOutput()
+_runner: CommandRunner = RealCommandRunner()
 logger = logging.getLogger(__name__)
 
 
@@ -62,7 +62,7 @@ def serve_remote():
 
         remote_type = get_remote_type(remote)
         if remote_type == "drive":
-            serve_shared = Prompt.ask(
+            serve_shared = console.input(
                 f"[yellow]Serve shared drive for '{remote}' as well? (y/n)[/yellow]",
                 choices=["y", "n"],
                 default="y",
@@ -129,8 +129,6 @@ def _serve_remote_thread(
             if "--drive-shared-with-me" in flags:
                 flags.remove("--drive-shared-with-me")
 
-    ip_address = get_ip_address()
-
     # Build the final command
     command = [
         "rclone",
@@ -138,7 +136,7 @@ def _serve_remote_thread(
         backend,
         remote_path,
         "--addr",
-        f"{ip_address}:{port}",
+        f"127.0.0.1:{port}",
         "--user",
         user,
         "--pass",
@@ -149,13 +147,14 @@ def _serve_remote_thread(
     display_name = f"{remote} (Shared)" if shared and remote_type == "drive" else remote
 
     console.print(
-        f"[green]Starting server for [bold]{display_name}[/bold] on http://{ip_address}:{port}[/green]"
+        f"[green]Starting server for [bold]{display_name}[/bold] on http://127.0.0.1:{port}[/green]"
     )
-    console.print(f"[dim]Command: {' '.join(command)}[/dim]")
+    safe_cmd = sanitize_command(command)
+    console.print(f"[dim]Command: {' '.join(safe_cmd)}[/dim]")
 
     with console.status(f"[dim]Serving {display_name}...[/dim]"):
         try:
-            subprocess.run(command, check=True)
+            _runner.run(command, check=True)
         except subprocess.CalledProcessError as e:
             stderr = (
                 e.stderr
@@ -183,13 +182,12 @@ def serve_local():
         return
     backend = backends[0] if isinstance(backends, list) else backends
 
-    ip_address = get_ip_address()
     port = os.environ.get("DEFAULT_PORT", 8080)
     username = os.environ.get("USERNAME", "user")
     password = os.environ.get("PASSWORD", "pass")
 
     console.print(
-        f"[green]Serving {local_path} on {ip_address}:{port} using {backend}...[/green]"
+        f"[green]Serving {local_path} on http://127.0.0.1:{port} using {backend}...[/green]"
     )
 
     command = [
@@ -197,7 +195,7 @@ def serve_local():
         "serve",
         backend,
         "--addr",
-        f"{ip_address}:{port}",
+        f"127.0.0.1:{port}",
         "--user",
         username,
         "--pass",
@@ -205,10 +203,11 @@ def serve_local():
         local_path,
     ]
 
-    console.print(f"[dim]Command: {' '.join(command)}[/dim]")
+    safe_cmd = sanitize_command(command)
+    console.print(f"[dim]Command: {' '.join(safe_cmd)}[/dim]")
     with console.status(f"[dim]Serving {local_path}...[/dim]"):
         try:
-            subprocess.run(command, check=True)
+            _runner.run(command, check=True)
         except subprocess.CalledProcessError as e:
             console.print(f"[bold red]Error serving {local_path}: {e}[/bold red]")
             logger.error(f"Failed to serve local path {local_path}: {e}")
@@ -218,7 +217,7 @@ def upload_backup(overwrite: bool = False):
     """
     Uploads files or a directory to a remote destination.
     """
-    from .config import PROJECT_ROOT, get_filters, build_filter_args
+    from .config import get_project_root, get_filters, build_filter_args
 
     console.rule("[bold]⬆️ Upload[/bold]")
 
@@ -257,7 +256,7 @@ def upload_backup(overwrite: bool = False):
         "\n[dim]Add exclude patterns for this upload? (comma-separated, or skip)[/dim]"
     )
     console.print("[dim]Examples: *.log, temp/, __pycache__/[/dim]")
-    exclude_input = Prompt.ask("Exclude patterns", default="")
+    exclude_input = console.input("Exclude patterns", default="")
     temp_filters = []
     if exclude_input.strip():
         temp_filters = [p.strip() for p in exclude_input.split(",") if p.strip()]
@@ -265,7 +264,8 @@ def upload_backup(overwrite: bool = False):
     console.rule("[green]Starting Upload[/green]")
 
     # Build filter arguments: global filters + temporary upload filters
-    global_filters = get_filters(PROJECT_ROOT)
+    root = get_project_root()
+    global_filters = get_filters(root)
     all_exclude = global_filters["exclude"] + temp_filters
     filter_args = build_filter_args(
         {"exclude": all_exclude, "include": global_filters["include"]}
@@ -314,7 +314,7 @@ def download_backup(overwrite: bool = False):
     """
     Downloads one or more files/directories from a remote destination.
     """
-    from .config import PROJECT_ROOT, get_filters, build_filter_args
+    from .config import get_project_root, get_filters, build_filter_args
 
     console.rule("[bold]⬇️ Download[/bold]")
 
@@ -357,7 +357,7 @@ def download_backup(overwrite: bool = False):
         "\n[dim]Add exclude patterns for this download? (comma-separated, or skip)[/dim]"
     )
     console.print("[dim]Examples: *.tmp, .cache/, Thumbs.db[/dim]")
-    exclude_input = Prompt.ask("Exclude patterns", default="")
+    exclude_input = console.input("Exclude patterns", default="")
     temp_filters = []
     if exclude_input.strip():
         temp_filters = [p.strip() for p in exclude_input.split(",") if p.strip()]
@@ -365,7 +365,8 @@ def download_backup(overwrite: bool = False):
     console.rule("[green]Starting Download[/green]")
 
     # Build filter arguments: global filters + temporary download filters
-    global_filters = get_filters(PROJECT_ROOT)
+    root = get_project_root()
+    global_filters = get_filters(root)
     all_exclude = global_filters["exclude"] + temp_filters
     filter_args = build_filter_args(
         {"exclude": all_exclude, "include": global_filters["include"]}
@@ -437,7 +438,7 @@ def manage_config():
     """
     Provides a menu to manage rclone flags in the config.ini file.
     """
-    config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
+    config_path = os.path.join(get_project_root(), "configs", "config.ini")
     config = ConfigParser()
     config.read(config_path)
 
@@ -462,7 +463,7 @@ def manage_config():
             )
         )
         console.print("5. Exit")
-        choice = Prompt.ask(
+        choice = console.input(
             "Enter your choice", choices=["1", "2", "3", "4", "5"], default="5"
         )
 
@@ -476,10 +477,10 @@ def manage_config():
             input("\nPress Enter to continue...")
 
         elif choice == "2":
-            remote_type = Prompt.ask(
+            remote_type = console.input(
                 "Enter the remote type (e.g., drive, mega)"
             ).lower()
-            flag_to_add = Prompt.ask(
+            flag_to_add = console.input(
                 "Enter the full flag to add/edit (e.g., --vfs-cache-mode=full)"
             )
 
@@ -498,12 +499,12 @@ def manage_config():
             save_changes()
 
         elif choice == "3":
-            remote_type = Prompt.ask("Enter the remote type").lower()
+            remote_type = console.input("Enter the remote type").lower()
             if not config.has_option("rclone_flags", remote_type):
                 console.print(f"[red]No flags found for '{remote_type}'.[/red]")
                 continue
 
-            flag_to_delete = Prompt.ask(
+            flag_to_delete = console.input(
                 "Enter the flag key to delete (e.g., --vfs-cache-mode)"
             )
             existing_flags = config.get("rclone_flags", remote_type).splitlines()
@@ -572,21 +573,21 @@ def sync_remotes(dry_run: bool = False, preview: bool = False, force: bool = Fal
         try:
             # Use two-pass approach to properly categorize files
             # Files only in source (missing on dst)
-            result_src = subprocess.run(
+            result_src = _runner.run(
                 ["rclone", "check", source_path, destination_path, "--missing-on-dst"],
                 capture_output=True,
                 text=True,
             )
 
             # Files only in dest (missing on src)
-            result_dst = subprocess.run(
+            result_dst = _runner.run(
                 ["rclone", "check", source_path, destination_path, "--missing-on-src"],
                 capture_output=True,
                 text=True,
             )
 
             # Files that differ (sizes/hashes differ)
-            result_diff = subprocess.run(
+            result_diff = _runner.run(
                 ["rclone", "check", source_path, destination_path],
                 capture_output=True,
                 text=True,
@@ -703,7 +704,7 @@ def generate_default_config():
     """
     Generates a default config.ini file with example configuration.
     """
-    config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
+    config_path = os.path.join(get_project_root(), "configs", "config.ini")
 
     if os.path.exists(config_path):
         console.print(
@@ -778,7 +779,7 @@ def check_remote(overwrite: bool = False):
     console.rule("[green]Running Check[/green]")
     command = ["rclone", "check", local_path, remote_path]
     with console.status("[dim]Checking files...[/dim]"):
-        result = subprocess.run(command)
+        result = _runner.run(command)
 
     if result.returncode == 0:
         console.print("[bold green]✅ All files match![/bold green]")
@@ -815,9 +816,9 @@ def ls_remote():
 
         try:
             with console.status(f"[dim]Listing {current_path}...[/dim]"):
-                output = subprocess.check_output(
+                output = _runner.check_output(
                     ["rclone", "lsjson", current_path], stderr=subprocess.PIPE
-                ).decode("utf-8")
+                )
 
             items = json.loads(output)
             dirs = [i for i in items if i["IsDir"]]
@@ -850,12 +851,12 @@ def ls_remote():
                 with console.status(
                     f"[dim]Listing {current_path} with lsf fallback...[/dim]"
                 ):
-                    dirs_output = subprocess.check_output(
+                    dirs_output = _runner.check_output(
                         ["rclone", "lsf", "--dirs-only", current_path]
-                    ).decode("utf-8")
-                    files_output = subprocess.check_output(
+                    )
+                    files_output = _runner.check_output(
                         ["rclone", "lsf", "--files-only", current_path]
-                    ).decode("utf-8")
+                    )
 
                 dir_names = [
                     d.strip().rstrip("/")
@@ -947,7 +948,7 @@ def ls_remote():
                     f"  {i:>3}. 📄 {f['Name']}  [dim]{size_str}  {date}[/dim]"
                 )
 
-            choice = Prompt.ask(
+            choice = console.input(
                 "\n[yellow]Number to enter folder, '..' to go up, 'q' to quit[/yellow]"
             )
 
@@ -1013,7 +1014,7 @@ def dedupe_remote():
         f"\n[yellow]⚠️  Running dedupe in [bold]{mode}[/bold] mode on {remote_path}[/yellow]"
     )
     if mode != "interactive":
-        confirm = Prompt.ask(
+        confirm = console.input(
             "Are you sure? This may delete files. (y/n)",
             choices=["y", "n"],
             default="n",
@@ -1024,7 +1025,7 @@ def dedupe_remote():
 
     with console.status(f"[dim]Running dedupe on {remote_path}...[/dim]"):
         command = ["rclone", "dedupe", f"--dedupe-mode={mode}", remote_path]
-        subprocess.run(command)
+        _runner.run(command)
     console.rule("[bold green]✅ Dedupe Complete[/bold green]")
 
 
@@ -1053,7 +1054,7 @@ def space_remote():
         console.print(f"\n[bold cyan]── {remote} ──[/bold cyan]")
         try:
             with console.status(f"[dim]Fetching quota for {remote}...[/dim]"):
-                result = subprocess.run(
+                result = _runner.run(
                     ["rclone", "about", f"{remote}:"], capture_output=True, text=True
                 )
             if result.returncode == 0:
@@ -1138,7 +1139,7 @@ def bisync_remotes():
     if not path2:
         return
 
-    resync = Prompt.ask(
+    resync = console.input(
         "\n[yellow]Run with --resync? (required on first run) (y/n)[/yellow]",
         choices=["y", "n"],
         default="n",
@@ -1168,7 +1169,8 @@ def manage_filters():
     """
     from .config import get_filters
 
-    config_path = os.path.join(PROJECT_ROOT, "configs", "config.ini")
+    root = get_project_root()
+    config_path = os.path.join(root, "configs", "config.ini")
 
     def load_config():
         config = ConfigParser()
@@ -1180,7 +1182,7 @@ def manage_filters():
             config.write(f)
 
     while True:
-        filters = get_filters(PROJECT_ROOT)
+        filters = get_filters(root)
 
         console.print("\n[bold cyan]--- Filter Management ---[/bold cyan]")
         console.print("\n[bold]Current Exclude Patterns:[/bold]")
@@ -1204,12 +1206,12 @@ def manage_filters():
         console.print("5. Reset to Defaults")
         console.print("6. Exit")
 
-        choice = Prompt.ask(
+        choice = console.input(
             "\nEnter your choice", choices=["1", "2", "3", "4", "5", "6"], default="6"
         )
 
         if choice == "1":
-            pattern = Prompt.ask("Enter exclude pattern (e.g., *.log, node_modules/)")
+            pattern = console.input("Enter exclude pattern (e.g., *.log, node_modules/)")
             if pattern:
                 config = load_config()
                 if "filters" not in config:
@@ -1225,7 +1227,7 @@ def manage_filters():
             if not filters["exclude"]:
                 console.print("[yellow]No exclude patterns to remove.[/yellow]")
                 continue
-            selected = Prompt.ask(
+            selected = console.input(
                 "Select pattern to remove",
                 choices=[str(i) for i in range(1, len(filters["exclude"]) + 1)],
             )
@@ -1239,7 +1241,7 @@ def manage_filters():
             console.print(f"[green]✅ Removed: {removed}[/green]")
 
         elif choice == "3":
-            pattern = Prompt.ask("Enter include pattern (e.g., important/*, *.pdf)")
+            pattern = console.input("Enter include pattern (e.g., important/*, *.pdf)")
             if pattern:
                 config = load_config()
                 if "filters" not in config:
@@ -1255,7 +1257,7 @@ def manage_filters():
             if not filters["include"]:
                 console.print("[yellow]No include patterns to remove.[/yellow]")
                 continue
-            selected = Prompt.ask(
+            selected = console.input(
                 "Select pattern to remove",
                 choices=[str(i) for i in range(1, len(filters["include"]) + 1)],
             )
@@ -1270,7 +1272,7 @@ def manage_filters():
 
         elif choice == "5":
             if (
-                Prompt.ask(
+                console.input(
                     "Reset to default patterns?", choices=["y", "n"], default="n"
                 )
                 == "y"

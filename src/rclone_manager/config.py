@@ -1,5 +1,4 @@
 import os
-import sys
 import logging
 from typing import Optional
 from pathlib import Path
@@ -18,19 +17,17 @@ def find_project_root(marker: str = "pyproject.toml") -> Path:
     raise FileNotFoundError(f"Project root marker '{marker}' not found.")
 
 
-try:
-    PROJECT_ROOT = find_project_root()
-except FileNotFoundError as e:
-    print(f"FATAL ERROR: Could not determine project root. {e}", file=sys.stderr)
-    sys.exit(1)
+def get_project_root() -> Path:
+    try:
+        return find_project_root()
+    except FileNotFoundError as e:
+        raise FileNotFoundError(str(e)) from e
 
 
 DEFAULTS = {
     "LOG_LEVEL": "INFO",
     "LOG_FILE": "logs/rclone_scripts.log",
     "DEFAULT_PORT": "8080",
-    "USERNAME": "user",
-    "PASSWORD": "pass",
     "INCLUDE_HIDDEN": "false",
     "USE_FZF": "true",
 }
@@ -95,8 +92,8 @@ def get_filters(root_dir: Optional[str] = None) -> dict:
     """
     if root_dir is None:
         try:
-            root_dir = PROJECT_ROOT
-        except Exception:
+            root_dir = get_project_root()
+        except FileNotFoundError:
             return {"exclude": [], "include": []}
 
     config_path = os.path.join(root_dir, "configs", "config.ini")

@@ -1,9 +1,9 @@
 import argparse
+import sys
 
 from rich.console import Console
 
-from .config import setup_env
-from .config import PROJECT_ROOT
+from .config import setup_env, get_project_root
 from .mount import mount_remote, unmount_remote
 from .webui_launcher import main as webui_main
 from .sync_pairs import (
@@ -38,7 +38,12 @@ def main():
     """
     The main function of the rclone-scripts CLI.
     """
-    setup_env(PROJECT_ROOT)
+    try:
+        root = get_project_root()
+    except FileNotFoundError as e:
+        print(f"FATAL: {e}", file=sys.stderr)
+        sys.exit(1)
+    setup_env(root)
     parser = argparse.ArgumentParser(description="Rclone Scripts")
     subparsers = parser.add_subparsers(dest="command")
 
