@@ -78,7 +78,7 @@ def serve_remote():
     # 2. Execution Phase: Start all planned jobs.
     threads = []
     username = os.environ.get("USERNAME", "user")
-    password = os.environ.get("PASSWORD")
+    password = os.environ.get("PASSWORD") or os.environ.get("RMAN_PASSWORD")
     if not password:
         console.print("[red]PASSWORD not set in environment or config. [/red]")
         console.print("[yellow]Set it in configs/config.ini under [DEFAULT]:[/yellow]")
@@ -190,7 +190,7 @@ def serve_local():
     port = os.environ.get("DEFAULT_PORT", 8080)
     bind_addr = os.environ.get("BIND_ADDRESS", "127.0.0.1")
     username = os.environ.get("USERNAME", "user")
-    password = os.environ.get("PASSWORD")
+    password = os.environ.get("PASSWORD") or os.environ.get("RMAN_PASSWORD")
     if not password:
         console.print("[red]PASSWORD not set in environment or config. [/red]")
         console.print("[yellow]Set it in configs/config.ini under [DEFAULT]:[/yellow]")
