@@ -6,7 +6,7 @@
 
 ---
 
-## 📋 Current Status (Refresh each session)
+## 📋 Current Status
 
 **What's Working:**
 - All 18 CLI commands functional (upload, download, sync, mount, serve, etc.)
@@ -17,52 +17,34 @@
 - Live transfer stats via rclone rc API
 - Global and per-pair exclude/include filters
 - Registry-based mount tracking with PID + rc port
+- 86 unit + 4 integration tests, CI pipeline (GitHub Actions)
+- Ruff linting (F, E, W rules)
 
 **Needs Work / Known Issues:**
 - **Web UI auth is cosmetic** — session-state only, no server-side validation
 - **`core.py` is a 1295-line god module** — handles 10+ concerns
-- **USERNAME still defaults to "user"** — `os.environ.get("USERNAME", "user")` is intentionally not hardened (username isn't secret), but asymmetry is noted
 
 **Recent Work:**
 - 2026-05-27 — Full testing infrastructure: protocols (`ports.py`), 86 unit + 4 integration tests across all 7 modules, CI (GitHub Actions), security fixes (removed default creds, bind to localhost, sanitize logs)
-- 2026-05-27 — Added ruff config (`[tool.ruff.lint]` with F, E, W rules, E501 ignored), auto-fixed 5 unused imports in `src/` and 15 in `tests/`
-- 2026-05-27 — Bumped requires-python to >=3.10, extracted 5 duplicated helpers from mount.py/status.py to utils.py, replaced WebUI N+1 subprocess with single lsjson call, enabled ruff lint with auto-fixes
-- 2026-05-27 — Added `BIND_ADDRESS` config option (default 127.0.0.1) for serve/WebUI binding; Web UI launcher respects config instead of hardcoded 0.0.0.0
-- 2026-05-27 — Security hardening batch: XSRF/CORS config-driven with secure defaults (ENABLE_XSRF_PROTECTION, ENABLE_CORS), passwords passed via RCLONE_USER/RCLONE_PASS env vars instead of CLI args, config/registry file permissions locked to 0o600, removed "pass" fallback default (PASSWORD must now be explicitly configured)
+- 2026-05-27 — Added ruff config, auto-fixed unused imports
+- 2026-05-27 — Bumped requires-python to >=3.10, extracted duplicated helpers to `utils.py`, fixed WebUI N+1 subprocess, enabled ruff lint
+- 2026-05-27 — Added `BIND_ADDRESS`, `ENABLE_XSRF_PROTECTION`, `ENABLE_CORS` config options; passwords via env vars; file permissions locked to 0o600; removed default PASSWORD fallback
 
 **Blockers:**
 - None
 
 ---
 
-## 🎯 Next Steps (Refresh each session)
-
-- [x] Fix CRITICAL security issues: remove default creds, sanitize command output, bind to localhost
-- [x] Extract duplicated helpers (`_is_windows`, `_get_mount_base`, `_registry_path`, `_load_registry`, `_rc_stats`) to `utils.py`
-- [x] Fix Python version requirement (bump to >=3.10 or replace `dict | None` with `Optional[dict]`)
-- [x] Add test infrastructure: pytest + pytest-mock + pytest-cov to dev deps, create `tests/` dir, add first unit tests
-- [x] Add ruff config to `pyproject.toml`
-- [x] Add CI pipeline (GitHub Actions)
-- [x] Move `[dependency-groups]` to `[project.optional-dependencies]`
-- [ ] Split `core.py` into `sync.py`, `browse.py`, `transfer.py`
-- [x] Fix WebUI N+1 subprocess pattern in directory listing
-- [x] Security hardening: XSRF/CORS config-driven, password via env var, file permissions locked, require explicit PASSWORD
-
----
-
-## 🏗️ Project Overview (Set once at project start)
+## 🏗️ Project Overview
 
 **What it is:** A Python CLI tool that simplifies rclone operations — upload/download, mount cloud storage via FUSE, serve files over HTTP/WebDAV/FTP, automate sync pairs, and browse cloud files through a Streamlit Web UI.
 
 **Vision:** Provide an intuitive, interactive terminal UI for all common rclone workflows, eliminating the need to remember rclone flags.
 
-**Current Focus:** Maintenance — fixing security issues, adding test coverage, improving code quality.
-
 ---
 
-## 🔧 Stack & Architecture (Set once at project start)
+## 🔧 Stack & Architecture
 
-### CLI Tool
 | Aspect | Value |
 |--------|-------|
 | Language | Python 3.10+ |
@@ -94,7 +76,7 @@ rclone-manager/
 ├── src/rclone_manager/
 │   ├── cli.py               # CLI entry point, arg parsing, dispatch
 │   ├── config.py            # Config loading, env setup, logging, filters
-│   ├── core.py              # God module (1295 lines) — serve, transfer, sync, browse, utils
+│   ├── core.py              # Core operations — serve, transfer, sync, browse
 │   ├── mount.py             # FUSE mount/unmount with rc API integration
 │   ├── status.py            # Status dashboard (mounts + sync pairs)
 │   ├── sync_pairs.py        # Sync pair CRUD + execution (11 modes)
@@ -113,21 +95,24 @@ rclone-manager/
 └── README.md
 ```
 
-### Environment Variables
-| Variable | Source | Purpose |
-|----------|--------|---------|
-| `LOG_LEVEL` | config.ini DEFAULT | Logging level |
-| `LOG_FILE` | config.ini DEFAULT | Log file path |
-| `DEFAULT_PORT` | config.ini DEFAULT | Port for serve commands |
-| `USERNAME` / `PASSWORD` | config.ini DEFAULT | Auth for serve + Web UI |
-| `INCLUDE_HIDDEN` | config.ini DEFAULT | Show hidden files in transfers |
-| `USE_FZF` | config.ini DEFAULT | Toggle fzf fuzzy search |
-| `RMAN_MOUNT_DIR` | config.ini DEFAULT | Mount base directory |
-| `RCLONE_FLAGS_*` | config.ini rclone_flags | Per-remote-type rclone flags |
+### Environment Variables (all from config.ini DEFAULT)
+| Variable | Purpose |
+|----------|---------|
+| `LOG_LEVEL` | Logging level |
+| `LOG_FILE` | Log file path |
+| `DEFAULT_PORT` | Port for serve commands |
+| `USERNAME` / `PASSWORD` | Auth for serve + Web UI |
+| `BIND_ADDRESS` | Bind address for serve/Web UI (default: 127.0.0.1) |
+| `ENABLE_XSRF_PROTECTION` | XSRF protection toggle (default: true) |
+| `ENABLE_CORS` | CORS toggle (default: true, restricted to origin) |
+| `INCLUDE_HIDDEN` | Show hidden files in transfers |
+| `USE_FZF` | Toggle fzf fuzzy search |
+| `RMAN_MOUNT_DIR` | Mount base directory |
+| `RCLONE_FLAGS_*` | Per-remote-type rclone flags (from `[rclone_flags]` section) |
 
 ---
 
-## 📁 Key Files (Set once at project start)
+## 📁 Key Files
 
 | Purpose | Path |
 |---------|------|
@@ -143,7 +128,7 @@ rclone-manager/
 
 ---
 
-## ⚡ Quick Commands (Set once at project start)
+## ⚡ Quick Commands
 
 ```bash
 # Run the CLI
@@ -170,46 +155,3 @@ uv run rclone-manager generate-config
 # Run web UI
 uv run rclone-manager web-ui
 ```
-
----
-
-## 🔒 Audit Summary (2026-05-27)
-
-### Security (16 findings — 5 CRITICAL, 6 HIGH, 4 MEDIUM, 1 LOW)
-
-| Severity | Count | Key Issues |
-|----------|-------|------------|
-| CRITICAL | 5 | Plaintext password in config.ini + source defaults, password logged to disk, XSRF+CORS disabled, password on CLI args |
-| HIGH | 6 | Client-side-only Web UI auth, services on 0.0.0.0, no rate limiting, path traversal in upload |
-| MEDIUM | 4 | Weak 6-digit password, world-readable config files, unsecured registry |
-| LOW | 1 | No security headers |
-
-**2026-05-27 fixes:**
-- Removed default creds from `config.py` DEFAULTS
-- All serve commands bind to `127.0.0.1`
-- Command logging sanitized via `sanitize_command()` in `utils.py`
-- XSRF/CORS now config-driven with secure defaults (ENABLE_XSRF_PROTECTION, ENABLE_CORS)
-- Passwords passed via RCLONE_USER/RCLONE_PASS env vars instead of CLI args
-- Config files (config.ini) and mount registry locked to 0o600 permissions
-- PASSWORD must be explicitly configured (no "pass" fallback)
-
-### Code Quality (40 findings — 11 HIGH, 15 MEDIUM, 14 LOW)
-- `core.py` god module (1295 lines, 10+ responsibilities)
-- 4 overly complex functions (171-186 lines each) with duplicated fzf/non-fzf branches
-- stderr crash in `_serve_remote_thread` (missing `capture_output=True`)
-- Dead parameter `overwrite` in `check_remote()`
-- `list_rclone_remotes` duplicated in `webui.py` without caching
-
-### Performance / DevOps (19 findings — 7 HIGH, 7 MEDIUM, 5 LOW)
-- `sync_remotes` preview: 3 redundant `rclone check` calls
-- `run_rclone_with_retry()` defined but never called
-- Stats polling hardcoded to 2s interval
-- No CI/CD pipeline at all
-- `[dependency-groups]` is uv-specific (breaks pip)
-- Port scanning brute-force (5572→5700)
-
-### Testing (resolved — see "Recent Work")
-- 86 unit + 4 integration tests across all 7 modules
-- Testability refactors: `ports.py` protocols, lazy `get_project_root()`, swappable console/runner
-- Security fixes applied: no default creds, bind to localhost, sanitized logging
-- CI pipeline (GitHub Actions) with lint + coverage matrix

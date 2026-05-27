@@ -7,11 +7,12 @@ A powerful Python CLI tool that simplifies rclone operations with an intuitive i
 - **📤 Upload/Download**: Interactive file transfers with overwrite protection
 - **🔗 Mount Remotes**: Mount cloud storage as local directories with FUSE
 - **🌐 Serve Files**: Share local/remote files via HTTP, WebDAV, or FTP
-- **🔄 Sync Pairs**: Automate recurring sync tasks with configurable modes
+- **🔄 Sync Pairs**: Automate recurring sync tasks with configurable modes (11 modes)
 - **☁️ Multi-Cloud**: Support for Google Drive, Mega, Google Photos, and all rclone backends
-- **📊 Status Dashboard**: View active mounts and sync pairs at a glance
+- **📊 Status Dashboard**: View active mounts with live transfer stats and sync pairs
 - **🛠️ Storage Utils**: Checksum verification, deduplication, space usage, copy-between remotes
-- **🖥️ Web UI**: Browser-based interface for file management
+- **🖥️ Web UI**: Browser-based file manager (optional Streamlit)
+- **🧪 Tested**: 86 unit tests + 4 integration tests, CI pipeline
 
 ## Supported Storage Providers
 
@@ -22,7 +23,7 @@ A powerful Python CLI tool that simplifies rclone operations with an intuitive i
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.10+
 - [rclone](https://rclone.org/downloads/) installed and configured
 - [uv](https://docs.astral.sh/uv/) package manager (recommended)
 - [fzf](https://github.com/junegunn/fzf) (optional, recommended for fuzzy search)
@@ -67,9 +68,19 @@ rclone-manager/
 ### config.ini
 
 Contains:
-- **DEFAULT section**: Log level, port, username/password for serving
+- **DEFAULT section**: Log level, port, username/password for serving, bind address, XSRF/CORS toggles
 - **rclone_flags section**: Custom flags per remote type (mega, drive, google photos)
 - **filters section**: Global exclude/include patterns for transfers
+
+Key security defaults (all configurable):
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `BIND_ADDRESS` | `127.0.0.1` | Bind serve/Web UI to localhost only |
+| `ENABLE_XSRF_PROTECTION` | `true` | Cross-site request forgery protection |
+| `ENABLE_CORS` | `true` | CORS restricted to origin |
+| `PASSWORD` | *(required)* | No default — must be explicitly set |
+
+Credentials for rclone serve are passed via environment variables (`RCLONE_USER`/`RCLONE_PASS`) — never exposed on the command line or in process listings.
 
 ### sync-pairs.json
 
@@ -339,4 +350,4 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**Note**: This tool requires a properly configured rclone installation. Secure your credentials and use appropriate network security when serving files.
+**Note**: This tool requires a properly configured rclone installation. Credentials for serving are passed via environment variables (not CLI args), and all services bind to `127.0.0.1` by default. Configure XSRF protection and CORS via `config.ini`. Set `PASSWORD` explicitly — there is no default fallback.
