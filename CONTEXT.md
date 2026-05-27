@@ -19,14 +19,13 @@
 - Registry-based mount tracking with PID + rc port
 
 **Needs Work / Known Issues:**
-- **Python 3.8/3.10 conflict** — `mount.py` and `status.py` use `dict | None` syntax (PEP 604, needs 3.10+) but `pyproject.toml` says `>=3.8`
 - **Web UI auth is cosmetic** — session-state only, no server-side validation; XSRF+CORS disabled
-- **Code duplication** — `status.py` duplicates 4+ helpers from `mount.py` due to circular import fears
 - **`core.py` is a 1295-line god module** — handles 10+ concerns
-- **No ruff config** — ruff runs with no rules enabled
 
 **Recent Work:**
 - 2026-05-27 — Full testing infrastructure: protocols (`ports.py`), 86 unit + 4 integration tests across all 7 modules, CI (GitHub Actions), security fixes (removed default creds, bind to localhost, sanitize logs)
+- 2026-05-27 — Added ruff config (`[tool.ruff.lint]` with F, E, W rules, E501 ignored), auto-fixed 5 unused imports in `src/` and 15 in `tests/`
+- 2026-05-27 — Bumped requires-python to >=3.10, extracted 5 duplicated helpers from mount.py/status.py to utils.py, replaced WebUI N+1 subprocess with single lsjson call, enabled ruff lint with auto-fixes
 
 **Blockers:**
 - None
@@ -36,14 +35,14 @@
 ## 🎯 Next Steps (Refresh each session)
 
 - [x] Fix CRITICAL security issues: remove default creds, sanitize command output, bind to localhost
-- [ ] Extract duplicated helpers (`_is_windows`, `_get_mount_base`, `_registry_path`, `_load_registry`, `_rc_stats`) to `utils.py`
-- [ ] Fix Python version requirement (bump to >=3.10 or replace `dict | None` with `Optional[dict]`)
+- [x] Extract duplicated helpers (`_is_windows`, `_get_mount_base`, `_registry_path`, `_load_registry`, `_rc_stats`) to `utils.py`
+- [x] Fix Python version requirement (bump to >=3.10 or replace `dict | None` with `Optional[dict]`)
 - [x] Add test infrastructure: pytest + pytest-mock + pytest-cov to dev deps, create `tests/` dir, add first unit tests
-- [ ] Add ruff config to `pyproject.toml`
+- [x] Add ruff config to `pyproject.toml`
 - [x] Add CI pipeline (GitHub Actions)
 - [x] Move `[dependency-groups]` to `[project.optional-dependencies]`
 - [ ] Split `core.py` into `sync.py`, `browse.py`, `transfer.py`
-- [ ] Fix WebUI N+1 subprocess pattern in directory listing
+- [x] Fix WebUI N+1 subprocess pattern in directory listing
 
 ---
 
@@ -62,13 +61,13 @@
 ### CLI Tool
 | Aspect | Value |
 |--------|-------|
-| Language | Python 3.8+ (with 3.10+ syntax issues) |
+| Language | Python 3.10+ |
 | Build System | Hatchling |
 | CLI Framework | `argparse` (stdlib) |
 | Terminal UI | Rich (console, tables, status, prompts) |
 | Web UI | Streamlit (optional, `gui` extra) |
 | Package Name | `rclone-manager-cli` |
-| Dev Tooling | Ruff (configured but no rules set) |
+| Dev Tooling | Ruff (F, E, W rules with E501 ignored) |
 | Testing | pytest + pytest-mock + pytest-cov (86 unit + 4 integration tests) |
 
 ### Key Dependencies
@@ -158,7 +157,7 @@ uv run pytest tests/ -v
 # Run with coverage
 uv run pytest tests/unit -v --cov --cov-report=term-missing
 
-# Lint (once ruff is configured)
+# Lint
 uv run ruff check src/
 
 # Generate default config
@@ -187,16 +186,13 @@ uv run rclone-manager web-ui
 - Command logging sanitized via `sanitize_command()` in `utils.py`
 
 ### Code Quality (40 findings — 11 HIGH, 15 MEDIUM, 14 LOW)
-- 4 duplicate helper functions across `mount.py` / `status.py` (circular import workaround)
 - `core.py` god module (1295 lines, 10+ responsibilities)
 - 4 overly complex functions (171-186 lines each) with duplicated fzf/non-fzf branches
 - stderr crash in `_serve_remote_thread` (missing `capture_output=True`)
-- Python 3.8 vs 3.10 type syntax conflict
 - Dead parameter `overwrite` in `check_remote()`
 - `list_rclone_remotes` duplicated in `webui.py` without caching
 
 ### Performance / DevOps (19 findings — 7 HIGH, 7 MEDIUM, 5 LOW)
-- WebUI: N+1 subprocess calls per directory listing
 - `sync_remotes` preview: 3 redundant `rclone check` calls
 - `run_rclone_with_retry()` defined but never called
 - Stats polling hardcoded to 2s interval
