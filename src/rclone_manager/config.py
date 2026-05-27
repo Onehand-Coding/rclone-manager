@@ -31,6 +31,8 @@ DEFAULTS = {
     "INCLUDE_HIDDEN": "false",
     "USE_FZF": "true",
     "BIND_ADDRESS": "127.0.0.1",
+    "ENABLE_XSRF_PROTECTION": "true",
+    "ENABLE_CORS": "true",
 }
 
 

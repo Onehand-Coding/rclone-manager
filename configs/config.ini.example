@@ -12,6 +12,12 @@ DEFAULT_PORT = 8080
 ; Address to bind serve/web-ui to (127.0.0.1 = local only, 0.0.0.0 = all networks)
 BIND_ADDRESS = 127.0.0.1
 
+; --- Web UI Security ---
+; Enable Streamlit's built-in XSRF protection and CORS enforcement.
+; Set to false only if connecting from non-browser clients on LAN.
+ENABLE_XSRF_PROTECTION = true
+ENABLE_CORS = true
+
 ; --- Credentials for rclone serve ---
 ; Replace with the username and password you want to use for FTP/WebDAV/HTTP access.
 USERNAME = your_username
