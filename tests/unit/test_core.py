@@ -110,6 +110,7 @@ class TestServeLocal:
         monkeypatch.setattr(
             "rclone_manager.core.choose_from_list", lambda *a, **kw: "http"
         )
+        monkeypatch.setenv("PASSWORD", "pass")
         fake_runner.add_response(CommandResult(0))
 
         from rclone_manager.core import serve_local
