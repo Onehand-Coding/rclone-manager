@@ -9,6 +9,7 @@ from .utils import get_ip_address
 def main():
     """Main entry point when called from CLI - starts Streamlit server programmatically"""
     local_ip = get_ip_address()
+    bind_addr = os.environ.get("BIND_ADDRESS", "127.0.0.1")
 
     # Path to the web UI launcher script
     current_dir = Path(__file__).parent
@@ -21,7 +22,7 @@ def main():
         "streamlit",
         "run",
         str(webui_path),
-        "--server.address=0.0.0.0",  # Allow external connections
+        f"--server.address={bind_addr}",
         "--server.port=8501",  # Default port
         "--server.enableCORS=false",  # Handle CORS properly
         "--server.enableXsrfProtection=false",
@@ -40,7 +41,8 @@ def main():
 
     print("Starting Rclone Manager Web UI...")
     print("Access the interface at: http://localhost:8501")
-    print(f"On other devices, use: http://{local_ip}:8501")
+    if bind_addr == "0.0.0.0":
+        print(f"On other devices, use: http://{local_ip}:8501")
     print("Press Ctrl+C to stop the server.\n")
 
     try:

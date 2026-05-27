@@ -30,6 +30,7 @@ DEFAULTS = {
     "DEFAULT_PORT": "8080",
     "INCLUDE_HIDDEN": "false",
     "USE_FZF": "true",
+    "BIND_ADDRESS": "127.0.0.1",
 }
 
 

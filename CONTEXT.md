@@ -26,6 +26,7 @@
 - 2026-05-27 — Full testing infrastructure: protocols (`ports.py`), 86 unit + 4 integration tests across all 7 modules, CI (GitHub Actions), security fixes (removed default creds, bind to localhost, sanitize logs)
 - 2026-05-27 — Added ruff config (`[tool.ruff.lint]` with F, E, W rules, E501 ignored), auto-fixed 5 unused imports in `src/` and 15 in `tests/`
 - 2026-05-27 — Bumped requires-python to >=3.10, extracted 5 duplicated helpers from mount.py/status.py to utils.py, replaced WebUI N+1 subprocess with single lsjson call, enabled ruff lint with auto-fixes
+- 2026-05-27 — Added `BIND_ADDRESS` config option (default 127.0.0.1) for serve/WebUI binding; Web UI launcher respects config instead of hardcoded 0.0.0.0
 
 **Blockers:**
 - None

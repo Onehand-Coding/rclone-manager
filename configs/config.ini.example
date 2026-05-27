@@ -9,6 +9,8 @@
 LOG_LEVEL = INFO
 LOG_FILE = logs/rclone_scripts.log
 DEFAULT_PORT = 8080
+; Address to bind serve/web-ui to (127.0.0.1 = local only, 0.0.0.0 = all networks)
+BIND_ADDRESS = 127.0.0.1
 
 ; --- Credentials for rclone serve ---
 ; Replace with the username and password you want to use for FTP/WebDAV/HTTP access.

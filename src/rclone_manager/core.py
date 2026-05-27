@@ -129,13 +129,14 @@ def _serve_remote_thread(
                 flags.remove("--drive-shared-with-me")
 
     # Build the final command
+    bind_addr = os.environ.get("BIND_ADDRESS", "127.0.0.1")
     command = [
         "rclone",
         "serve",
         backend,
         remote_path,
         "--addr",
-        f"127.0.0.1:{port}",
+        f"{bind_addr}:{port}",
         "--user",
         user,
         "--pass",
@@ -146,7 +147,7 @@ def _serve_remote_thread(
     display_name = f"{remote} (Shared)" if shared and remote_type == "drive" else remote
 
     console.print(
-        f"[green]Starting server for [bold]{display_name}[/bold] on http://127.0.0.1:{port}[/green]"
+        f"[green]Starting server for [bold]{display_name}[/bold] on http://{bind_addr}:{port}[/green]"
     )
     safe_cmd = sanitize_command(command)
     console.print(f"[dim]Command: {' '.join(safe_cmd)}[/dim]")
@@ -182,11 +183,12 @@ def serve_local():
     backend = backends[0] if isinstance(backends, list) else backends
 
     port = os.environ.get("DEFAULT_PORT", 8080)
+    bind_addr = os.environ.get("BIND_ADDRESS", "127.0.0.1")
     username = os.environ.get("USERNAME", "user")
     password = os.environ.get("PASSWORD", "pass")
 
     console.print(
-        f"[green]Serving {local_path} on http://127.0.0.1:{port} using {backend}...[/green]"
+        f"[green]Serving {local_path} on http://{bind_addr}:{port} using {backend}...[/green]"
     )
 
     command = [
@@ -194,7 +196,7 @@ def serve_local():
         "serve",
         backend,
         "--addr",
-        f"127.0.0.1:{port}",
+        f"{bind_addr}:{port}",
         "--user",
         username,
         "--pass",
