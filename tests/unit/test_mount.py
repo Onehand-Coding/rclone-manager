@@ -12,7 +12,7 @@ class TestHelpers:
     def test_get_mount_base_uses_env_var(self, monkeypatch):
         from rclone_manager.mount import _get_mount_base
 
-        monkeypatch.setenv("RMAN_MOUNT_DIR", "/custom/mnt")
+        monkeypatch.setenv("MOUNT_DIR", "/custom/mnt")
         assert _get_mount_base() == "/custom/mnt"
 
     def test_get_mount_base_defaults(self):
@@ -40,19 +40,19 @@ class TestHelpers:
     def test_registry_path_uses_mount_base(self, monkeypatch):
         from rclone_manager.mount import _registry_path
 
-        monkeypatch.setenv("RMAN_MOUNT_DIR", "/tmp/rman_test")
+        monkeypatch.setenv("MOUNT_DIR", "/tmp/rman_test")
         assert _registry_path() == "/tmp/rman_test/.rc_ports.json"
 
     def test_load_registry_returns_empty_when_no_file(self, monkeypatch):
         from rclone_manager.mount import _load_registry
 
-        monkeypatch.setenv("RMAN_MOUNT_DIR", "/nonexistent_path_xyz")
+        monkeypatch.setenv("MOUNT_DIR", "/nonexistent_path_xyz")
         assert _load_registry() == {}
 
     def test_save_and_load_registry(self, monkeypatch, tmp_path):
         from rclone_manager.mount import _load_registry, _save_registry
 
-        monkeypatch.setenv("RMAN_MOUNT_DIR", str(tmp_path))
+        monkeypatch.setenv("MOUNT_DIR", str(tmp_path))
         _save_registry({"test": {"rc_port": 5572, "pid": 1234}})
         data = _load_registry()
         assert data["test"]["rc_port"] == 5572
@@ -60,7 +60,7 @@ class TestHelpers:
     def test_remove_from_registry(self, monkeypatch, tmp_path):
         from rclone_manager.mount import _load_registry, _save_registry, _remove_from_registry
 
-        monkeypatch.setenv("RMAN_MOUNT_DIR", str(tmp_path))
+        monkeypatch.setenv("MOUNT_DIR", str(tmp_path))
         _save_registry({"keep": {"rc_port": 1}, "remove": {"rc_port": 2}})
         _remove_from_registry("remove")
         data = _load_registry()

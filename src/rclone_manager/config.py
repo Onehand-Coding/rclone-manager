@@ -33,6 +33,8 @@ DEFAULTS = {
     "BIND_ADDRESS": "127.0.0.1",
     "ENABLE_XSRF_PROTECTION": "true",
     "ENABLE_CORS": "true",
+    "USERNAME": "user",
+    "MOUNT_DIR": "~/mnt",
 }
 
 
@@ -53,10 +55,7 @@ def setup_env(root_dir: str):
     # Process the [DEFAULT] section explicitly, as it's not in config.sections()
     if "DEFAULT" in config:
         for key, value in config["DEFAULT"].items():
-            env_key = f"RMAN_{key.upper()}"
-            os.environ[env_key] = value
-            if key.upper() in DEFAULTS:
-                os.environ[key.upper()] = value
+            os.environ[key.upper()] = value
 
     # Process all other named sections like [rclone_flags]
     for section_name in config.sections():

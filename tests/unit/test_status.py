@@ -18,13 +18,13 @@ class TestHelpers:
     def test_get_mount_base_uses_env_var(self, monkeypatch):
         from rclone_manager.status import _get_mount_base
 
-        monkeypatch.setenv("RMAN_MOUNT_DIR", "/custom/status_mnt")
+        monkeypatch.setenv("MOUNT_DIR", "/custom/status_mnt")
         assert _get_mount_base() == "/custom/status_mnt"
 
     def test_load_registry_returns_empty_when_no_file(self, monkeypatch):
         from rclone_manager.status import _load_registry
 
-        monkeypatch.setenv("RMAN_MOUNT_DIR", "/nonexistent_status_test")
+        monkeypatch.setenv("MOUNT_DIR", "/nonexistent_status_test")
         assert _load_registry() == {}
 
     def test_load_sync_pairs_returns_empty_when_no_file(self, monkeypatch, tmp_path):
