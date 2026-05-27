@@ -19,14 +19,16 @@
 - Registry-based mount tracking with PID + rc port
 
 **Needs Work / Known Issues:**
-- **Web UI auth is cosmetic** — session-state only, no server-side validation; XSRF+CORS disabled
+- **Web UI auth is cosmetic** — session-state only, no server-side validation
 - **`core.py` is a 1295-line god module** — handles 10+ concerns
+- **USERNAME still defaults to "user"** — `os.environ.get("USERNAME", "user")` is intentionally not hardened (username isn't secret), but asymmetry is noted
 
 **Recent Work:**
 - 2026-05-27 — Full testing infrastructure: protocols (`ports.py`), 86 unit + 4 integration tests across all 7 modules, CI (GitHub Actions), security fixes (removed default creds, bind to localhost, sanitize logs)
 - 2026-05-27 — Added ruff config (`[tool.ruff.lint]` with F, E, W rules, E501 ignored), auto-fixed 5 unused imports in `src/` and 15 in `tests/`
 - 2026-05-27 — Bumped requires-python to >=3.10, extracted 5 duplicated helpers from mount.py/status.py to utils.py, replaced WebUI N+1 subprocess with single lsjson call, enabled ruff lint with auto-fixes
 - 2026-05-27 — Added `BIND_ADDRESS` config option (default 127.0.0.1) for serve/WebUI binding; Web UI launcher respects config instead of hardcoded 0.0.0.0
+- 2026-05-27 — Security hardening batch: XSRF/CORS config-driven with secure defaults (ENABLE_XSRF_PROTECTION, ENABLE_CORS), passwords passed via RCLONE_USER/RCLONE_PASS env vars instead of CLI args, config/registry file permissions locked to 0o600, removed "pass" fallback default (PASSWORD must now be explicitly configured)
 
 **Blockers:**
 - None
@@ -44,6 +46,7 @@
 - [x] Move `[dependency-groups]` to `[project.optional-dependencies]`
 - [ ] Split `core.py` into `sync.py`, `browse.py`, `transfer.py`
 - [x] Fix WebUI N+1 subprocess pattern in directory listing
+- [x] Security hardening: XSRF/CORS config-driven, password via env var, file permissions locked, require explicit PASSWORD
 
 ---
 
@@ -185,6 +188,10 @@ uv run rclone-manager web-ui
 - Removed default creds from `config.py` DEFAULTS
 - All serve commands bind to `127.0.0.1`
 - Command logging sanitized via `sanitize_command()` in `utils.py`
+- XSRF/CORS now config-driven with secure defaults (ENABLE_XSRF_PROTECTION, ENABLE_CORS)
+- Passwords passed via RCLONE_USER/RCLONE_PASS env vars instead of CLI args
+- Config files (config.ini) and mount registry locked to 0o600 permissions
+- PASSWORD must be explicitly configured (no "pass" fallback)
 
 ### Code Quality (40 findings — 11 HIGH, 15 MEDIUM, 14 LOW)
 - `core.py` god module (1295 lines, 10+ responsibilities)
