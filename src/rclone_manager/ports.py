@@ -111,12 +111,14 @@ class FakeCommandRunner:
     def reset(self) -> None:
         self.commands: List[List[str]] = []
         self.responses: List[CommandResult] = []
+        self.kwargs: List[dict] = []
 
     def add_response(self, result: CommandResult) -> None:
         self.responses.append(result)
 
     def run(self, command: List[str], **kwargs: Any) -> CommandResult:
         self.commands.append(command)
+        self.kwargs.append(kwargs)
         if self.responses:
             return self.responses.pop(0)
         raise IndexError("FakeCommandRunner.run() called with no responses queued")

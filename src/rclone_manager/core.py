@@ -130,6 +130,10 @@ def _serve_remote_thread(
 
     # Build the final command
     bind_addr = os.environ.get("BIND_ADDRESS", "127.0.0.1")
+    serve_env = os.environ.copy()
+    serve_env["RCLONE_USER"] = user
+    serve_env["RCLONE_PASS"] = passw
+
     command = [
         "rclone",
         "serve",
@@ -137,10 +141,6 @@ def _serve_remote_thread(
         remote_path,
         "--addr",
         f"{bind_addr}:{port}",
-        "--user",
-        user,
-        "--pass",
-        passw,
     ] + flags
 
     # Determine the display name for the log message
@@ -154,7 +154,7 @@ def _serve_remote_thread(
 
     with console.status(f"[dim]Serving {display_name}...[/dim]"):
         try:
-            _runner.run(command, check=True)
+            _runner.run(command, check=True, env=serve_env)
         except subprocess.CalledProcessError as e:
             stderr = (
                 e.stderr
@@ -191,16 +191,16 @@ def serve_local():
         f"[green]Serving {local_path} on http://{bind_addr}:{port} using {backend}...[/green]"
     )
 
+    serve_env = os.environ.copy()
+    serve_env["RCLONE_USER"] = username
+    serve_env["RCLONE_PASS"] = password
+
     command = [
         "rclone",
         "serve",
         backend,
         "--addr",
         f"{bind_addr}:{port}",
-        "--user",
-        username,
-        "--pass",
-        password,
         local_path,
     ]
 
@@ -208,7 +208,7 @@ def serve_local():
     console.print(f"[dim]Command: {' '.join(safe_cmd)}[/dim]")
     with console.status(f"[dim]Serving {local_path}...[/dim]"):
         try:
-            _runner.run(command, check=True)
+            _runner.run(command, check=True, env=serve_env)
         except subprocess.CalledProcessError as e:
             console.print(f"[bold red]Error serving {local_path}: {e}[/bold red]")
             logger.error(f"Failed to serve local path {local_path}: {e}")

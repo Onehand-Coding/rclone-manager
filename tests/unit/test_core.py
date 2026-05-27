@@ -122,6 +122,17 @@ class TestServeLocal:
         assert "http" in last_cmd
         assert "/serve/path" in last_cmd
 
+        # Verify no credentials in command
+        assert "--user" not in last_cmd
+        assert "--pass" not in last_cmd
+
+        # Verify env vars were set
+        assert len(fake_runner.kwargs) >= 1
+        last_kwargs = fake_runner.kwargs[-1]
+        assert "env" in last_kwargs
+        assert last_kwargs["env"].get("RCLONE_USER") == "user"
+        assert last_kwargs["env"].get("RCLONE_PASS") == "pass"
+
 
 class TestDedupeRemote:
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
