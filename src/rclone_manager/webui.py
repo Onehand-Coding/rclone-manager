@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import time
@@ -39,56 +40,33 @@ def list_rclone_remotes() -> list:
         return []
 
 
-def list_remote_directory_contents(remote_path):
-    """List contents of a remote directory using lsf for reliable remote access"""
+def list_remote_directory_contents(remote_path: str) -> list[dict]:
+    """List contents of a remote directory using lsjson for single-call listing."""
     try:
-        # Use rclone lsf to list files/directories with trailing slash for directories
         output = subprocess.check_output(
-            ["rclone", "lsf", "--dirs-only", remote_path]
+            ["rclone", "lsjson", remote_path]
         ).decode("utf-8")
-        dirs = [item.strip() for item in output.strip().split("\n") if item.strip()]
-
-        output = subprocess.check_output(
-            ["rclone", "lsf", "--files-only", remote_path]
-        ).decode("utf-8")
-        files = [item.strip() for item in output.strip().split("\n") if item.strip()]
-
-        contents = []
-
-        # Add directories
-        for item in dirs:
-            if not st.session_state.show_hidden and item.startswith("."):
-                continue
-            contents.append(
-                {
-                    "name": item.rstrip("/"),  # Remove trailing slash
-                    "is_dir": True,
-                    "size": "-",
-                    "modified": "-",
-                }
-            )
-
-        # Add files
-        for item in files:
-            if not st.session_state.show_hidden and item.startswith("."):
-                continue
-            # Get file size - this will be slower but more accurate
-            try:
-                size_output = subprocess.check_output(
-                    ["rclone", "ls", "--max-depth", "1", f"{remote_path}{item}"]
-                ).decode("utf-8")
-                size = size_output.split()[0] + " bytes" if size_output.split() else "-"
-            except Exception:
-                size = "-"
-
-            contents.append(
-                {"name": item, "is_dir": False, "size": size, "modified": "-"}
-            )
-
-        return sorted(contents, key=lambda x: (not x["is_dir"], x["name"]))
+        entries = json.loads(output)
     except subprocess.CalledProcessError:
         st.error(f"Error accessing remote path: {remote_path}")
         return []
+    except json.JSONDecodeError:
+        st.error(f"Error parsing listing for {remote_path}")
+        return []
+
+    contents = []
+    for entry in entries:
+        name: str = entry["Name"]
+        if not st.session_state.show_hidden and name.startswith("."):
+            continue
+        contents.append({
+            "name": name,
+            "is_dir": entry["IsDir"],
+            "size": f'{entry["Size"]} bytes' if not entry["IsDir"] else "-",
+            "modified": entry.get("ModTime", "-"),
+        })
+
+    return sorted(contents, key=lambda x: (not x["is_dir"], x["name"]))
 
 
 def list_directory_contents(path):
