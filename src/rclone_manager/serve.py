@@ -4,14 +4,9 @@ import subprocess
 import threading
 
 from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
-from .utils import (
-    choose_from_list,
-    get_remote_type,
-    get_rclone_flags,
-    navigate_local_file_system,
-    list_rclone_remotes,
-    sanitize_command,
-)
+from .navigation import choose_from_list, navigate_local_file_system
+from .remote_info import get_remote_type, get_rclone_flags, list_rclone_remotes
+from .utils import sanitize_command
 
 console: OutputPort = RichOutput()
 _runner: CommandRunner = RealCommandRunner()

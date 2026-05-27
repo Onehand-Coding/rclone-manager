@@ -4,9 +4,9 @@ import pytest
 from rclone_manager.ports import CommandResult
 from rclone_manager.utils import (
     get_ip_address,
-    get_rclone_flags,
     run_rclone_with_retry,
 )
+from rclone_manager.remote_info import get_rclone_flags
 
 
 class TestGetRcloneFlags:

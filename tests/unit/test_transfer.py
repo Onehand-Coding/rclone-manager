@@ -51,7 +51,7 @@ class TestUploadBackup:
             lambda label, cmd, **kw: (0, []),
         )
         monkeypatch.setattr(
-            "rclone_manager.transfer.get_project_root", lambda: str(tmp_path)
+            "rclone_manager.transfer.merge_filter_args", lambda **kw: []
         )
         self._setup_input(test_output)
 
@@ -80,7 +80,7 @@ class TestUploadBackup:
             lambda label, cmd, **kw: (0, []),
         )
         monkeypatch.setattr(
-            "rclone_manager.transfer.get_project_root", lambda: str(tmp_path)
+            "rclone_manager.transfer.merge_filter_args", lambda **kw: []
         )
         self._setup_input(test_output)
 
@@ -109,7 +109,7 @@ class TestUploadBackup:
             lambda label, cmd, **kw: (1, ["Error: connection failed"]),
         )
         monkeypatch.setattr(
-            "rclone_manager.transfer.get_project_root", lambda: str(tmp_path)
+            "rclone_manager.transfer.merge_filter_args", lambda **kw: []
         )
         self._setup_input(test_output)
 
@@ -165,7 +165,7 @@ class TestDownloadBackup:
             lambda label, cmd, **kw: (0, []),
         )
         monkeypatch.setattr(
-            "rclone_manager.transfer.get_project_root", lambda: str(tmp_path)
+            "rclone_manager.transfer.merge_filter_args", lambda **kw: []
         )
         self._setup_input(test_output)
 
@@ -194,7 +194,7 @@ class TestDownloadBackup:
             lambda label, cmd, **kw: (1, ["Error: not found"]),
         )
         monkeypatch.setattr(
-            "rclone_manager.transfer.get_project_root", lambda: str(tmp_path)
+            "rclone_manager.transfer.merge_filter_args", lambda **kw: []
         )
         self._setup_input(test_output)
 

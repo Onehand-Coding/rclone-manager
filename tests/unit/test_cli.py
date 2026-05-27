@@ -226,7 +226,7 @@ class TestArgParse:
 
         called = []
         monkeypatch.setattr(
-            "rclone_manager.utils._toggle_fzf",
+            "rclone_manager.fzf._toggle_fzf",
             lambda action: called.append(action),
         )
         monkeypatch.setattr(cli, "get_project_root", lambda: "/tmp")

@@ -6,12 +6,7 @@ from rich.table import Table
 from rich import box
 
 from .ports import OutputPort, RichOutput
-from .utils import (
-    _is_windows,
-    _get_mount_base,
-    _load_registry,
-    _rc_vfs_stats,
-)
+from .mount_helpers import _is_windows, _get_mount_base, _load_registry, _rc_vfs_stats
 
 console: OutputPort = RichOutput()
 logger = logging.getLogger(__name__)

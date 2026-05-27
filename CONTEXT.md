@@ -17,24 +17,28 @@
 - Live transfer stats via rclone rc API
 - Global and per-pair exclude/include filters
 - Registry-based mount tracking with PID + rc port
-- 109 unit + 4 integration tests, CI pipeline (GitHub Actions)
+- 127 unit + 4 integration tests, CI pipeline (GitHub Actions)
 - Ruff linting (F, E, W, S rules)
 - core.py split into 5 focused modules (273 lines, down from 1308)
+- utils.py split into 6 focused modules (99 lines, down from 726)
+- FakeCommandRunner supports popen() via _FakePopen wrapper
 
 **Needs Work / Known Issues:**
 - **Web UI auth is cosmetic** — session-state only, no server-side validation
-- **utils.py is 726 lines** — catch-all that should be split
 - **mount.py (39%), remote_ops.py (34%), utils.py (21%) need more tests**
 
 **Recent Work:**
-- 2026-05-27 — Refactored core.py into serve.py, transfer.py, sync.py, remote_ops.py. Fixed hardcoded "rclone" password fallback in webui.py. Added 23 new tests (109 total, 40% coverage). Removed unused deps. Added S (security) ruff rules.
-- 2026-05-27 — Full testing infrastructure: protocols (`ports.py`), 86 unit + 4 integration tests across all 7 modules, CI (GitHub Actions), security fixes (removed default creds, bind to localhost, sanitize logs)
-- 2026-05-27 — Added ruff config, auto-fixed unused imports
-- 2026-05-27 — Bumped requires-python to >=3.10, extracted duplicated helpers to `utils.py`, fixed WebUI N+1 subprocess, enabled ruff lint
-- 2026-05-27 — Added `BIND_ADDRESS`, `ENABLE_XSRF_PROTECTION`, `ENABLE_CORS` config options; passwords via env vars; file permissions locked to 0o600; removed default PASSWORD fallback
+- 2026-05-27 — Refactored utils.py into fzf.py, navigation.py, remote_info.py, mount_helpers.py, stats.py (726→99 lines). Added WEBUI_USERNAME/WEBUI_PASSWORD to DEFAULTS. Fixed silently-swallowed OSErrors with logger.warning. Extracted merge_filter_args helper for filter merging. Added 18 new tests (127 total), 17 focused on mount.py coverage. Added _FakePopen to FakeCommandRunner for popen() support.
 
 **Blockers:**
 - None
+
+**Next Steps:**
+1. Write tests for `remote_ops.py` (34% → 60%)
+2. Write tests for `sync_pairs.py` (29% → 60%)
+3. Write tests for `webui.py` (0% → meaningful coverage)
+4. Add integration tests to CI pipeline
+5. Add type hints to `webui.py`
 
 ---
 
@@ -57,7 +61,7 @@
 | Web UI | Streamlit (optional, `gui` extra) |
 | Package Name | `rclone-manager-cli` |
 | Dev Tooling | Ruff (F, E, W rules with E501 ignored) |
-| Testing | pytest + pytest-mock + pytest-cov (86 unit + 4 integration tests) |
+| Testing | pytest + pytest-mock + pytest-cov (127 unit + 4 integration tests) |
 
 ### Key Dependencies
 | Package | Purpose |
@@ -89,11 +93,16 @@ rclone-manager/
 │   ├── sync_pairs.py        # Sync pair CRUD + execution (11 modes)
 │   ├── ports.py             # OutputPort/CommandRunner protocols + test doubles
 │   ├── utils.py             # Shared utilities, navigation, fzf, rc stats
+│   ├── fzf.py               # Fuzzy-find toggling + run
+│   ├── navigation.py        # Local/remote filesystem chooser
+│   ├── remote_info.py       # Rclone remote listing + flags
+│   ├── mount_helpers.py     # Mount registry + rc stats helpers
+│   ├── stats.py             # Rclone rc stats + progress
 │   ├── webui.py             # Streamlit file browser UI
 │   └── webui_launcher.py    # Streamlit server launcher
 ├── tests/
 │   ├── conftest.py          # Shared fixtures (fake_runner, test_output)
-│   ├── unit/                # 109 unit tests across 10 modules
+│   ├── unit/                # 127 unit tests across 10 modules
 │   │   ├── test_core.py
 │   │   ├── test_serve.py
 │   │   ├── test_transfer.py
@@ -138,6 +147,11 @@ rclone-manager/
 | Mount logic | `src/rclone_manager/mount.py` |
 | Sync pairs | `src/rclone_manager/sync_pairs.py` |
 | Shared utils | `src/rclone_manager/utils.py` |
+| Fuzzy-find | `src/rclone_manager/fzf.py` |
+| Filesystem navigation | `src/rclone_manager/navigation.py` |
+| Remote info | `src/rclone_manager/remote_info.py` |
+| Mount helpers | `src/rclone_manager/mount_helpers.py` |
+| RC stats | `src/rclone_manager/stats.py` |
 | Status dashboard | `src/rclone_manager/status.py` |
 | Web UI | `src/rclone_manager/webui.py` |
 | Package config | `pyproject.toml` |

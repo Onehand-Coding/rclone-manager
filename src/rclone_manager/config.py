@@ -7,6 +7,9 @@ from configparser import ConfigParser
 from logging.handlers import RotatingFileHandler
 
 
+logger = logging.getLogger(__name__)
+
+
 def find_project_root(marker: str = "pyproject.toml") -> Path:
     """Dynamically finds the project root by searching upwards for a marker file."""
     current_path = Path(__file__).resolve()
@@ -34,6 +37,9 @@ DEFAULTS = {
     "ENABLE_XSRF_PROTECTION": "true",
     "ENABLE_CORS": "true",
     "USERNAME": "user",
+    "PASSWORD": "",
+    "WEBUI_USERNAME": "admin",
+    "WEBUI_PASSWORD": "",
     "MOUNT_DIR": "~/mnt",
 }
 
@@ -67,8 +73,8 @@ def setup_env(root_dir: str):
     if os.name != "nt" and os.path.exists(config_path):
         try:
             os.chmod(config_path, 0o600)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.warning("Failed to set permissions on config file: %s", e)
 
 
 def setup_logging():
@@ -149,3 +155,11 @@ def build_filter_args(filters: dict) -> list:
     for pattern in filters.get("include", []):
         args.extend(["--include", pattern])
     return args
+
+
+def merge_filter_args(root: str | None = None, extra_exclude: list | None = None, extra_include: list | None = None) -> list:
+    """Load global filters via get_filters, merge extra ones, and return rclone filter args."""
+    global_filters = get_filters(root)
+    exclude = global_filters["exclude"] + (extra_exclude or [])
+    include = global_filters["include"] + (extra_include or [])
+    return build_filter_args({"exclude": exclude, "include": include})

@@ -201,7 +201,7 @@ def main():
         elif args.command == "filters":
             manage_filters()
         elif args.command == "fzf":
-            from .utils import _toggle_fzf
+            from .fzf import _toggle_fzf
 
             action = args.action or "status"
             _toggle_fzf(action)

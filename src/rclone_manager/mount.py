@@ -8,18 +8,10 @@ import time
 
 from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
 
-from .utils import (
-    choose_from_list,
-    get_remote_type,
-    get_rclone_flags,
-    list_rclone_remotes,
-    sanitize_command,
-    _is_windows,
-    _get_mount_base,
-    _registry_path,
-    _load_registry,
-    _rc_vfs_stats,
-)
+from .navigation import choose_from_list
+from .remote_info import get_remote_type, get_rclone_flags, list_rclone_remotes
+from .utils import sanitize_command
+from .mount_helpers import _is_windows, _get_mount_base, _registry_path, _load_registry, _rc_vfs_stats
 
 console: OutputPort = RichOutput()
 _runner: CommandRunner = RealCommandRunner()
@@ -92,8 +84,8 @@ def _save_registry(registry: dict):
     if os.name != "nt":
         try:
             os.chmod(path, 0o600)
-        except OSError:
-            pass
+        except OSError as e:
+            logger.warning("Failed to set permissions on mount registry: %s", e)
 
 
 def _remove_from_registry(name: str):

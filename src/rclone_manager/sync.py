@@ -1,12 +1,9 @@
 import logging
 
 from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
-from .utils import (
-    _run_rclone_with_stats,
-    choose_from_list,
-    navigate_remote_file_system,
-    list_rclone_remotes,
-)
+from .stats import _run_rclone_with_stats
+from .navigation import choose_from_list, navigate_remote_file_system
+from .remote_info import list_rclone_remotes
 
 console: OutputPort = RichOutput()
 _runner: CommandRunner = RealCommandRunner()

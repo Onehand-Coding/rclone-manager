@@ -7,13 +7,9 @@ from rich.table import Table
 
 from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
 
-from .utils import (
-    _run_rclone_with_stats,
-    choose_from_list,
-    list_rclone_remotes,
-    navigate_local_file_system,
-    navigate_remote_file_system,
-)
+from .stats import _run_rclone_with_stats
+from .navigation import choose_from_list, navigate_local_file_system, navigate_remote_file_system
+from .remote_info import list_rclone_remotes
 
 console: OutputPort = RichOutput()
 _runner: CommandRunner = RealCommandRunner()
@@ -126,7 +122,7 @@ def _save_pairs(pairs: list):
 
 def _build_command(pair: dict, dry_run: bool = False) -> list:
     """Build rclone command for a sync pair with filters applied."""
-    from .config import get_project_root, get_filters, build_filter_args
+    from .config import merge_filter_args
 
     pair_type = pair.get("type", "local_to_remote")
     mode = pair["mode"]
@@ -136,13 +132,7 @@ def _build_command(pair: dict, dry_run: bool = False) -> list:
     local = pair.get("local", "")
     remote = pair.get("remote", "")
 
-    root = get_project_root()
-    global_filters = get_filters(root)
     pair_filters = pair.get("filters", {})
-
-    exclude = global_filters["exclude"] + pair_filters.get("exclude", [])
-    include = global_filters["include"] + pair_filters.get("include", [])
-    merged_filters = {"exclude": exclude, "include": include}
 
     if pair_type == "local_to_remote":
         if mode == "upload_only":
@@ -157,7 +147,7 @@ def _build_command(pair: dict, dry_run: bool = False) -> list:
             cmd = ["rclone", "bisync", local, remote]
             if not pair.get("bisync_resync_done") or os.name == "nt":
                 cmd.append("--resync")
-            cmd.extend(build_filter_args(merged_filters))
+            cmd.extend(merge_filter_args(extra_exclude=pair_filters.get("exclude"), extra_include=pair_filters.get("include")))
             if dry_run:
                 cmd.append("--dry-run")
             return cmd
@@ -178,7 +168,7 @@ def _build_command(pair: dict, dry_run: bool = False) -> list:
             cmd = ["rclone", "bisync", source, destination]
             if not pair.get("bisync_resync_done"):
                 cmd.append("--resync")
-            cmd.extend(build_filter_args(merged_filters))
+            cmd.extend(merge_filter_args(extra_exclude=pair_filters.get("exclude"), extra_include=pair_filters.get("include")))
             if dry_run:
                 cmd.append("--dry-run")
             return cmd
@@ -187,7 +177,7 @@ def _build_command(pair: dict, dry_run: bool = False) -> list:
 
     if dry_run:
         cmd.append("--dry-run")
-    cmd.extend(build_filter_args(merged_filters))
+    cmd.extend(merge_filter_args(extra_exclude=pair_filters.get("exclude"), extra_include=pair_filters.get("include")))
     return cmd
 
 

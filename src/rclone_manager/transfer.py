@@ -1,15 +1,11 @@
 import os
 import logging
 
-from .config import get_project_root, get_filters, build_filter_args
+from .config import merge_filter_args
 from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
-from .utils import (
-    _run_rclone_with_stats,
-    choose_from_list,
-    navigate_local_file_system,
-    navigate_remote_file_system,
-    list_rclone_remotes,
-)
+from .stats import _run_rclone_with_stats
+from .navigation import choose_from_list, navigate_local_file_system, navigate_remote_file_system
+from .remote_info import list_rclone_remotes
 
 console: OutputPort = RichOutput()
 _runner: CommandRunner = RealCommandRunner()
@@ -59,12 +55,7 @@ def upload_backup(overwrite: bool = False):
 
     console.rule("[green]Starting Upload[/green]")
 
-    root = get_project_root()
-    global_filters = get_filters(root)
-    all_exclude = global_filters["exclude"] + temp_filters
-    filter_args = build_filter_args(
-        {"exclude": all_exclude, "include": global_filters["include"]}
-    )
+    filter_args = merge_filter_args(extra_exclude=temp_filters)
 
     base_command = ["rclone", "copy"]
     if overwrite:
@@ -153,12 +144,7 @@ def download_backup(overwrite: bool = False):
 
     console.rule("[green]Starting Download[/green]")
 
-    root = get_project_root()
-    global_filters = get_filters(root)
-    all_exclude = global_filters["exclude"] + temp_filters
-    filter_args = build_filter_args(
-        {"exclude": all_exclude, "include": global_filters["include"]}
-    )
+    filter_args = merge_filter_args(extra_exclude=temp_filters)
 
     base_command = ["rclone", "copy"]
     if overwrite:

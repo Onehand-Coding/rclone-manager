@@ -104,6 +104,22 @@ class TestOutput:
         raise IndexError("TestOutput.input() called with no input_responses queued")
 
 
+class _FakePopen:
+    def __init__(self, result: CommandResult) -> None:
+        self.returncode: int | None = None
+        self.pid = 12345
+        self.stdin: Any = None
+        self.stderr = __import__("io").StringIO(result.stderr) if result.stderr else None
+        self._result = result
+
+    def poll(self) -> int | None:
+        self.returncode = self._result.returncode
+        return self.returncode
+
+    def terminate(self) -> None:
+        pass
+
+
 class FakeCommandRunner:
     def __init__(self) -> None:
         self.reset()
@@ -125,7 +141,8 @@ class FakeCommandRunner:
 
     def popen(self, command: List[str], **kwargs: Any) -> subprocess.Popen:
         self.commands.append(command)
-        raise NotImplementedError("FakeCommandRunner.popen not implemented — mock it")
+        result = self.run(command, **kwargs)
+        return _FakePopen(result)
 
     def check_output(self, command: List[str], **kwargs: Any) -> str:
         self.commands.append(command)

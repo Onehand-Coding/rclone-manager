@@ -6,4 +6,5 @@ logs/
 .env
 configs/config.ini
 configs/sync-pairs.json
+*.coverage
 
