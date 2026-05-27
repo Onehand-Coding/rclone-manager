@@ -8,16 +8,19 @@ from rich.table import Table
 from rich import box
 
 from .ports import OutputPort, RichOutput
+from .utils import (
+    _is_windows,
+    _get_mount_base,
+    _registry_path,
+    _load_registry,
+    _rc_vfs_stats,
+)
 
 console: OutputPort = RichOutput()
 logger = logging.getLogger(__name__)
 
 
 # ── helpers (duplicated minimally to avoid circular imports) ──────────────────
-
-
-def _is_windows() -> bool:
-    return sys.platform == "win32"
 
 
 def _is_mount_point(path: str) -> bool:
@@ -27,30 +30,6 @@ def _is_mount_point(path: str) -> bool:
     if _is_windows():
         return os.path.isdir(path)
     return False
-
-
-def _get_mount_base() -> str:
-    return os.path.expanduser(
-        os.environ.get("RMAN_MOUNT_DIR", os.environ.get("MOUNT_DIR", "~/mnt"))
-    )
-
-
-def _registry_path() -> str:
-    return os.path.join(_get_mount_base(), ".rc_ports.json")
-
-
-def _load_registry() -> dict:
-    try:
-        with open(_registry_path()) as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in registry: {e}")
-        return {}
-    except Exception as e:
-        logger.error(f"Failed to load registry: {e}")
-        return {}
 
 
 def _sync_pairs_path() -> str:
@@ -72,25 +51,6 @@ def _load_sync_pairs() -> list:
     except Exception as e:
         logger.error(f"Failed to load sync pairs: {e}")
         return []
-
-
-def _rc_vfs_stats(port: int) -> dict | None:
-    try:
-        result = subprocess.run(
-            ["rclone", "rc", "vfs/stats", f"--rc-addr=127.0.0.1:{port}"],
-            capture_output=True,
-            text=True,
-            timeout=3,
-        )
-        if result.returncode == 0:
-            return json.loads(result.stdout)
-    except subprocess.TimeoutExpired:
-        logger.warning(f"Timeout fetching VFS stats from port {port}")
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse VFS stats: {e}")
-    except Exception as e:
-        logger.warning(f"Failed to get VFS stats: {e}")
-    return None
 
 
 def _pending_transfers(port: int) -> int:

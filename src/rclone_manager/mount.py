@@ -15,6 +15,11 @@ from .utils import (
     get_rclone_flags,
     list_rclone_remotes,
     sanitize_command,
+    _is_windows,
+    _get_mount_base,
+    _registry_path,
+    _load_registry,
+    _rc_vfs_stats,
 )
 
 console: OutputPort = RichOutput()
@@ -27,16 +32,6 @@ UNSUPPORTED_NAMES = ("gphotos", "google photos", "cloudinary")
 
 
 # ── internal helpers ──────────────────────────────────────────────────────────
-
-
-def _is_windows() -> bool:
-    return sys.platform == "win32"
-
-
-def _get_mount_base() -> str:
-    return os.path.expanduser(
-        os.environ.get("RMAN_MOUNT_DIR", os.environ.get("MOUNT_DIR", "~/mnt"))
-    )
 
 
 def _fusermount_cmd() -> str:
@@ -88,44 +83,6 @@ def _unmount_via_rc(rc_port: int, mount_point: str) -> bool:
     return False
 
 
-def _rc_stats(port: int) -> dict | None:
-    """Query rclone rc vfs/stats. Returns dict or None if unavailable."""
-    try:
-        result = _runner.run(
-            ["rclone", "rc", "vfs/stats", f"--rc-addr=127.0.0.1:{port}"],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-        if result.returncode == 0:
-            return json.loads(result.stdout)
-    except subprocess.TimeoutExpired:
-        logger.warning(f"Timeout fetching VFS stats from port {port}")
-    except json.JSONDecodeError as e:
-        logger.warning(f"Failed to parse VFS stats: {e}")
-    except Exception as e:
-        logger.warning(f"Failed to get VFS stats: {e}")
-    return None
-
-
-def _registry_path() -> str:
-    return os.path.join(_get_mount_base(), ".rc_ports.json")
-
-
-def _load_registry() -> dict:
-    try:
-        with open(_registry_path()) as f:
-            return json.load(f)
-    except FileNotFoundError:
-        return {}
-    except json.JSONDecodeError as e:
-        logger.error(f"Invalid JSON in registry: {e}")
-        return {}
-    except Exception as e:
-        logger.error(f"Failed to load registry: {e}")
-        return {}
-
-
 def _save_registry(registry: dict):
     path = _registry_path()
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -152,7 +109,7 @@ def _check_pending_uploads(port: int, name: str) -> str:
     Check for pending uploads via rc. Returns 'ok', 'cancel', or 'force'.
     Only prompts if there are actually pending uploads.
     """
-    stats = _rc_stats(port)
+    stats = _rc_vfs_stats(port)
     if stats is None:
         return "ok"  # rc unavailable, proceed silently
 
@@ -181,7 +138,7 @@ def _check_pending_uploads(port: int, name: str) -> str:
         with console.status("") as status:
             while True:
                 time.sleep(3)
-                stats = _rc_stats(port)
+                stats = _rc_vfs_stats(port)
                 if stats is None:
                     break
                 disk_cache = stats.get("diskCache", {})
