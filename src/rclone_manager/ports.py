@@ -98,7 +98,7 @@ class TestOutput:
     def add_input_response(self, value: str) -> None:
         self.input_responses.append(value)
 
-    def input(self, prompt: str = "") -> str:
+    def input(self, prompt: str = "", **kwargs: Any) -> str:
         if self.input_responses:
             return self.input_responses.pop(0)
         raise IndexError("TestOutput.input() called with no input_responses queued")

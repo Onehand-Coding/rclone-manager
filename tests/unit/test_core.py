@@ -1,51 +1,48 @@
-
 from rclone_manager.ports import CommandResult
-
-# All patching uses string paths to target the correct module-level name bindings
 
 
 class TestCheckRemote:
     def test_no_local_path_returns_early(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
         monkeypatch.setattr(
-            "rclone_manager.core.navigate_local_file_system",
+            "rclone_manager.remote_ops.navigate_local_file_system",
             lambda purpose=None, **kw: None,
         )
 
-        from rclone_manager.core import check_remote
+        from rclone_manager.remote_ops import check_remote
 
         check_remote()
 
     def test_no_remotes_returns_early(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
         monkeypatch.setattr(
-            "rclone_manager.core.navigate_local_file_system",
+            "rclone_manager.remote_ops.navigate_local_file_system",
             lambda purpose=None, **kw: "/local/path",
         )
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: [])
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: [])
 
-        from rclone_manager.core import check_remote
+        from rclone_manager.remote_ops import check_remote
 
         check_remote()
 
     def test_calls_rclone_check(self, monkeypatch, test_output, fake_runner):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
         monkeypatch.setattr(
-            "rclone_manager.core.navigate_local_file_system",
+            "rclone_manager.remote_ops.navigate_local_file_system",
             lambda purpose=None, **kw: "/local/path",
         )
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: ["myremote"])
-        monkeypatch.setattr("rclone_manager.core._runner", fake_runner)
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: ["myremote"])
+        monkeypatch.setattr("rclone_manager.remote_ops._runner", fake_runner)
         monkeypatch.setattr(
-            "rclone_manager.core.navigate_remote_file_system",
+            "rclone_manager.remote_ops.navigate_remote_file_system",
             lambda remote, purpose=None, **kw: "myremote:/backup",
         )
         monkeypatch.setattr(
-            "rclone_manager.core.choose_from_list", lambda *a, **kw: "myremote"
+            "rclone_manager.remote_ops.choose_from_list", lambda *a, **kw: "myremote"
         )
         fake_runner.add_response(CommandResult(0))
 
-        from rclone_manager.core import check_remote
+        from rclone_manager.remote_ops import check_remote
 
         check_remote()
         assert len(fake_runner.commands) >= 1
@@ -90,30 +87,30 @@ class TestGenerateDefaultConfig:
 
 class TestServeLocal:
     def test_no_path_returns_early(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.serve.console", test_output)
         monkeypatch.setattr(
-            "rclone_manager.core.navigate_local_file_system",
+            "rclone_manager.serve.navigate_local_file_system",
             lambda purpose=None, **kw: None,
         )
 
-        from rclone_manager.core import serve_local
+        from rclone_manager.serve import serve_local
 
         serve_local()
 
     def test_calls_rclone_serve(self, monkeypatch, test_output, fake_runner):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.serve.console", test_output)
         monkeypatch.setattr(
-            "rclone_manager.core.navigate_local_file_system",
+            "rclone_manager.serve.navigate_local_file_system",
             lambda purpose=None, **kw: "/serve/path",
         )
-        monkeypatch.setattr("rclone_manager.core._runner", fake_runner)
+        monkeypatch.setattr("rclone_manager.serve._runner", fake_runner)
         monkeypatch.setattr(
-            "rclone_manager.core.choose_from_list", lambda *a, **kw: "http"
+            "rclone_manager.serve.choose_from_list", lambda *a, **kw: "http"
         )
         monkeypatch.setenv("PASSWORD", "pass")
         fake_runner.add_response(CommandResult(0))
 
-        from rclone_manager.core import serve_local
+        from rclone_manager.serve import serve_local
 
         serve_local()
         assert len(fake_runner.commands) >= 1
@@ -123,11 +120,9 @@ class TestServeLocal:
         assert "http" in last_cmd
         assert "/serve/path" in last_cmd
 
-        # Verify no credentials in command
         assert "--user" not in last_cmd
         assert "--pass" not in last_cmd
 
-        # Verify env vars were set
         assert len(fake_runner.kwargs) >= 1
         last_kwargs = fake_runner.kwargs[-1]
         assert "env" in last_kwargs
@@ -137,35 +132,34 @@ class TestServeLocal:
 
 class TestDedupeRemote:
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: [])
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: [])
 
-        from rclone_manager.core import dedupe_remote
+        from rclone_manager.remote_ops import dedupe_remote
 
         dedupe_remote()
         assert any("No rclone remotes" in m for m in test_output.messages)
 
     def test_calls_rclone_dedupe(self, monkeypatch, test_output, fake_runner):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: ["myremote"])
-        monkeypatch.setattr("rclone_manager.core._runner", fake_runner)
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: ["myremote"])
+        monkeypatch.setattr("rclone_manager.remote_ops._runner", fake_runner)
         monkeypatch.setattr(
-            "rclone_manager.core.navigate_remote_file_system",
+            "rclone_manager.remote_ops.navigate_remote_file_system",
             lambda remote, purpose=None, **kw: "myremote:/dedupe",
         )
         fake_runner.add_response(CommandResult(0))
 
         choose_iter = iter(["myremote", "newest"])
         monkeypatch.setattr(
-            "rclone_manager.core.choose_from_list", lambda *a, **kw: next(choose_iter)
+            "rclone_manager.remote_ops.choose_from_list", lambda *a, **kw: next(choose_iter)
         )
-        # Replace console.input so it accepts kwargs and returns "y" for the confirm prompt
         monkeypatch.setattr(
-            "rclone_manager.core.console.input",
+            "rclone_manager.remote_ops.console.input",
             lambda prompt="", **kw: "y",
         )
 
-        from rclone_manager.core import dedupe_remote
+        from rclone_manager.remote_ops import dedupe_remote
 
         dedupe_remote()
         assert len(fake_runner.commands) >= 1
@@ -175,24 +169,24 @@ class TestDedupeRemote:
 
 class TestSpaceRemote:
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: [])
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: [])
 
-        from rclone_manager.core import space_remote
+        from rclone_manager.remote_ops import space_remote
 
         space_remote()
         assert any("No rclone remotes" in m for m in test_output.messages)
 
     def test_calls_rclone_about(self, monkeypatch, test_output, fake_runner):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: ["myremote"])
-        monkeypatch.setattr("rclone_manager.core._runner", fake_runner)
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: ["myremote"])
+        monkeypatch.setattr("rclone_manager.remote_ops._runner", fake_runner)
         monkeypatch.setattr(
-            "rclone_manager.core.choose_from_list", lambda *a, **kw: "myremote"
+            "rclone_manager.remote_ops.choose_from_list", lambda *a, **kw: "myremote"
         )
         fake_runner.add_response(CommandResult(0, stdout="Storage: 1TB\nUsed: 200GB\n"))
 
-        from rclone_manager.core import space_remote
+        from rclone_manager.remote_ops import space_remote
 
         space_remote()
         assert len(fake_runner.commands) >= 1
@@ -202,10 +196,10 @@ class TestSpaceRemote:
 
 class TestLsRemote:
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: [])
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: [])
 
-        from rclone_manager.core import ls_remote
+        from rclone_manager.remote_ops import ls_remote
 
         ls_remote()
         assert any("No rclone remotes" in m for m in test_output.messages)
@@ -213,10 +207,10 @@ class TestLsRemote:
 
 class TestServeRemote:
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: [])
+        monkeypatch.setattr("rclone_manager.serve.console", test_output)
+        monkeypatch.setattr("rclone_manager.serve.list_rclone_remotes", lambda: [])
 
-        from rclone_manager.core import serve_remote
+        from rclone_manager.serve import serve_remote
 
         serve_remote()
         assert any("No rclone remotes" in m for m in test_output.messages)
@@ -224,10 +218,10 @@ class TestServeRemote:
 
 class TestCopyBetween:
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: [])
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: [])
 
-        from rclone_manager.core import copy_between
+        from rclone_manager.remote_ops import copy_between
 
         copy_between()
         assert any("No rclone remotes" in m for m in test_output.messages)
@@ -235,10 +229,77 @@ class TestCopyBetween:
 
 class TestBisyncRemotes:
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
-        monkeypatch.setattr("rclone_manager.core.console", test_output)
-        monkeypatch.setattr("rclone_manager.core.list_rclone_remotes", lambda: [])
+        monkeypatch.setattr("rclone_manager.remote_ops.console", test_output)
+        monkeypatch.setattr("rclone_manager.remote_ops.list_rclone_remotes", lambda: [])
 
-        from rclone_manager.core import bisync_remotes
+        from rclone_manager.remote_ops import bisync_remotes
 
         bisync_remotes()
         assert any("No rclone remotes" in m for m in test_output.messages)
+
+
+class TestManageConfig:
+    def test_exit_immediately(self, monkeypatch, test_output, tmp_path):
+        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.core.get_project_root", lambda: str(tmp_path))
+        test_output.add_input_response("5")
+
+        from rclone_manager.core import manage_config
+
+        manage_config()
+        assert any("Configuration Management" in m for m in test_output.messages)
+
+    def test_add_and_view_flag(self, monkeypatch, test_output, tmp_path):
+        config_dir = tmp_path / "configs"
+        config_dir.mkdir()
+        config_file = config_dir / "config.ini"
+        config_file.write_text("[DEFAULT]\n")
+
+        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.core.get_project_root", lambda: str(tmp_path))
+
+        test_output.add_input_response("2")
+        test_output.add_input_response("drive")
+        test_output.add_input_response("--vfs-cache-mode=full")
+        test_output.add_input_response("5")
+
+        from rclone_manager.core import manage_config
+
+        manage_config()
+
+
+class TestManageFilters:
+    def test_exit_immediately(self, monkeypatch, test_output, tmp_path):
+        config_dir = tmp_path / "configs"
+        config_dir.mkdir()
+        config_file = config_dir / "config.ini"
+        config_file.write_text("[DEFAULT]\n")
+
+        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.core.get_project_root", lambda: str(tmp_path))
+
+        test_output.add_input_response("6")
+
+        from rclone_manager.core import manage_filters
+
+        manage_filters()
+        assert any("Filter Management" in m for m in test_output.messages)
+
+    def test_add_exclude_pattern(self, monkeypatch, test_output, tmp_path):
+        config_dir = tmp_path / "configs"
+        config_dir.mkdir()
+        config_file = config_dir / "config.ini"
+        config_file.write_text("[DEFAULT]\n[filters]\nexclude = *.log")
+
+        monkeypatch.setattr("rclone_manager.core.console", test_output)
+        monkeypatch.setattr("rclone_manager.core.get_project_root", lambda: str(tmp_path))
+
+        test_output.add_input_response("1")
+        test_output.add_input_response("*.tmp")
+        test_output.add_input_response("6")
+
+        from rclone_manager.core import manage_filters
+
+        manage_filters()
+        content = config_file.read_text()
+        assert "*.tmp" in content

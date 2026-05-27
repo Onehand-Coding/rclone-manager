@@ -12,10 +12,6 @@ requires-python = ">=3.10"
 dependencies = [
     "python-dotenv",
     "rich",
-    "markdown-it-py",
-    "mdurl",
-    "pygments",
-    #"streamlit",
 ]
 [project.optional-dependencies]
 dev = [
@@ -44,5 +40,11 @@ addopts = "-v --tb=short"
 source = ["src"]
 
 [tool.ruff.lint]
-select = ["F", "E", "W"]
+select = ["F", "E", "W", "S"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S106", "S107"]
+"src/rclone_manager/ports.py" = ["S603"]
+"src/rclone_manager/webui.py" = ["S603", "S607"]
+"src/rclone_manager/webui_launcher.py" = ["S104", "S603", "S607"]

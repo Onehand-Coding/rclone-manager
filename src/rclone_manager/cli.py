@@ -15,14 +15,14 @@ from .sync_pairs import (
 )
 from .status import show_status
 from .core import (
-    serve_remote,
-    serve_local,
-    upload_backup,
-    download_backup,
-    sync_remotes,
     manage_config,
     manage_filters,
     generate_default_config,
+)
+from .serve import serve_remote, serve_local
+from .transfer import upload_backup, download_backup
+from .sync import sync_remotes
+from .remote_ops import (
     check_remote,
     ls_remote,
     dedupe_remote,

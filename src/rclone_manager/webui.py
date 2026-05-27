@@ -158,15 +158,19 @@ def main_app():
                 "Password", type="password", value=os.environ.get("PASSWORD", "")
             )
 
-            # Check credentials from environment or a predefined set
             correct_username = os.environ.get(
                 "WEBUI_USERNAME", os.environ.get("USERNAME", "admin")
             )
             correct_password = os.environ.get(
-                "WEBUI_PASSWORD", os.environ.get("PASSWORD", "rclone")
-            )
+                "WEBUI_PASSWORD"
+            ) or os.environ.get("PASSWORD")
 
-            if st.button("Login"):
+            if not correct_password:
+                st.error(
+                    "No password configured. Set WEBUI_PASSWORD or PASSWORD "
+                    "environment variable in configs/config.ini."
+                )
+            elif st.button("Login"):
                 if username == correct_username and password == correct_password:
                     st.session_state.authenticated = True
                     st.rerun()

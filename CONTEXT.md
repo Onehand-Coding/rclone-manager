@@ -17,14 +17,17 @@
 - Live transfer stats via rclone rc API
 - Global and per-pair exclude/include filters
 - Registry-based mount tracking with PID + rc port
-- 86 unit + 4 integration tests, CI pipeline (GitHub Actions)
-- Ruff linting (F, E, W rules)
+- 109 unit + 4 integration tests, CI pipeline (GitHub Actions)
+- Ruff linting (F, E, W, S rules)
+- core.py split into 5 focused modules (273 lines, down from 1308)
 
 **Needs Work / Known Issues:**
 - **Web UI auth is cosmetic** — session-state only, no server-side validation
-- **`core.py` is a 1295-line god module** — handles 10+ concerns
+- **utils.py is 726 lines** — catch-all that should be split
+- **mount.py (39%), remote_ops.py (34%), utils.py (21%) need more tests**
 
 **Recent Work:**
+- 2026-05-27 — Refactored core.py into serve.py, transfer.py, sync.py, remote_ops.py. Fixed hardcoded "rclone" password fallback in webui.py. Added 23 new tests (109 total, 40% coverage). Removed unused deps. Added S (security) ruff rules.
 - 2026-05-27 — Full testing infrastructure: protocols (`ports.py`), 86 unit + 4 integration tests across all 7 modules, CI (GitHub Actions), security fixes (removed default creds, bind to localhost, sanitize logs)
 - 2026-05-27 — Added ruff config, auto-fixed unused imports
 - 2026-05-27 — Bumped requires-python to >=3.10, extracted duplicated helpers to `utils.py`, fixed WebUI N+1 subprocess, enabled ruff lint
@@ -76,7 +79,11 @@ rclone-manager/
 ├── src/rclone_manager/
 │   ├── cli.py               # CLI entry point, arg parsing, dispatch
 │   ├── config.py            # Config loading, env setup, logging, filters
-│   ├── core.py              # Core operations — serve, transfer, sync, browse
+│   ├── core.py              # Config/filter management, generate-config, re-exports
+│   ├── serve.py             # Serve remote/local via http/webdav/ftp
+│   ├── transfer.py          # Upload/download operations
+│   ├── sync.py              # Remote-to-remote sync with preview
+│   ├── remote_ops.py        # Remote ops: ls, dedupe, space, checksum, copy-between, bisync
 │   ├── mount.py             # FUSE mount/unmount with rc API integration
 │   ├── status.py            # Status dashboard (mounts + sync pairs)
 │   ├── sync_pairs.py        # Sync pair CRUD + execution (11 modes)
@@ -86,7 +93,12 @@ rclone-manager/
 │   └── webui_launcher.py    # Streamlit server launcher
 ├── tests/
 │   ├── conftest.py          # Shared fixtures (fake_runner, test_output)
-│   ├── unit/                # 86 unit tests across 7 modules
+│   ├── unit/                # 109 unit tests across 10 modules
+│   │   ├── test_core.py
+│   │   ├── test_serve.py
+│   │   ├── test_transfer.py
+│   │   ├── test_sync.py
+│   │   └── ...
 │   └── integration/         # 4 integration tests (require rclone)
 ├── .github/workflows/
 │   └── ci.yml               # Lint + unit test matrix (3.10, 3.11, 3.12)
@@ -119,6 +131,10 @@ rclone-manager/
 | CLI entry point | `src/rclone_manager/cli.py:37` |
 | Config loading | `src/rclone_manager/config.py:39` |
 | Core operations | `src/rclone_manager/core.py` |
+| Serve logic | `src/rclone_manager/serve.py` |
+| Transfer logic | `src/rclone_manager/transfer.py` |
+| Sync logic | `src/rclone_manager/sync.py` |
+| Remote ops | `src/rclone_manager/remote_ops.py` |
 | Mount logic | `src/rclone_manager/mount.py` |
 | Sync pairs | `src/rclone_manager/sync_pairs.py` |
 | Shared utils | `src/rclone_manager/utils.py` |
