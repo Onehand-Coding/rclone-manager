@@ -17,7 +17,7 @@
 - Live transfer stats via rclone rc API
 - Global and per-pair exclude/include filters
 - Registry-based mount tracking with PID + rc port
-- 127 unit + 4 integration tests, CI pipeline (GitHub Actions)
+- 250 unit + 4 integration tests, CI pipeline (GitHub Actions)
 - Ruff linting (F, E, W, S rules)
 - core.py split into 5 focused modules (273 lines, down from 1308)
 - utils.py split into 6 focused modules (99 lines, down from 726)
@@ -25,19 +25,19 @@
 
 **Needs Work / Known Issues:**
 - **Web UI auth is cosmetic** — session-state only, no server-side validation
-- **mount.py (39%), remote_ops.py (34%), utils.py (21%) need more tests**
+- **webui.py (25%) and main_app() are hard to test** — 475-line Streamlit function
+- **stats.py (17%), sync.py (39%) need more tests**
 
 **Recent Work:**
-- 2026-05-27 — Refactored utils.py into fzf.py, navigation.py, remote_info.py, mount_helpers.py, stats.py (726→99 lines). Added WEBUI_USERNAME/WEBUI_PASSWORD to DEFAULTS. Fixed silently-swallowed OSErrors with logger.warning. Extracted merge_filter_args helper for filter merging. Added 18 new tests (127 total), 17 focused on mount.py coverage. Added _FakePopen to FakeCommandRunner for popen() support.
+- 2026-05-27 — QA audit: wrote 131 new tests (127→250 total). remote_ops.py 34→99%, sync_pairs.py 29→100%, webui.py 0→25%. Added type hints to webui.py. Added integration-tests job to CI pipeline. 64% total coverage.
 
 **Blockers:**
 - None
 
 **Next Steps:**
-1. Write tests for `remote_ops.py` (34% → 60%)
-2. Write tests for `sync_pairs.py` (29% → 60%)
-3. Write tests for `webui.py` (0% → meaningful coverage)
-4. Add integration tests to CI pipeline
+1. Write tests for `stats.py` (17%), `sync.py` (39%), and `webui.py` (25%) — remaining coverage gaps
+2. Reduce `main_app()` in webui.py — 475-line Streamlit function makes testing hard
+3. Web UI auth needs server-side validation
 5. Add type hints to `webui.py`
 
 ---
@@ -61,7 +61,7 @@
 | Web UI | Streamlit (optional, `gui` extra) |
 | Package Name | `rclone-manager-cli` |
 | Dev Tooling | Ruff (F, E, W rules with E501 ignored) |
-| Testing | pytest + pytest-mock + pytest-cov (127 unit + 4 integration tests) |
+| Testing | pytest + pytest-mock + pytest-cov (250 unit + 4 integration tests) |
 
 ### Key Dependencies
 | Package | Purpose |
@@ -102,15 +102,20 @@ rclone-manager/
 │   └── webui_launcher.py    # Streamlit server launcher
 ├── tests/
 │   ├── conftest.py          # Shared fixtures (fake_runner, test_output)
-│   ├── unit/                # 127 unit tests across 10 modules
+│   ├── unit/                # 250 unit tests across 13 modules
 │   │   ├── test_core.py
 │   │   ├── test_serve.py
 │   │   ├── test_transfer.py
 │   │   ├── test_sync.py
-│   │   └── ...
+│   │   ├── test_remote_ops.py
+│   │   ├── test_sync_pairs.py
+│   │   ├── test_mount.py
+│   │   ├── test_cli.py
+│   │   ├── test_utils.py
+│   │   ├── test_webui.py
 │   └── integration/         # 4 integration tests (require rclone)
-├── .github/workflows/
-│   └── ci.yml               # Lint + unit test matrix (3.10, 3.11, 3.12)
+│   ├── .github/workflows/
+│   │   └── ci.yml               # Lint + unit test matrix + integration tests
 ├── pyproject.toml
 ├── CONTEXT.md
 └── README.md
@@ -154,6 +159,7 @@ rclone-manager/
 | RC stats | `src/rclone_manager/stats.py` |
 | Status dashboard | `src/rclone_manager/status.py` |
 | Web UI | `src/rclone_manager/webui.py` |
+| Web UI launcher | `src/rclone_manager/webui_launcher.py` |
 | Package config | `pyproject.toml` |
 
 ---

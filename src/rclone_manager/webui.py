@@ -12,7 +12,7 @@ import streamlit as st
 logger = logging.getLogger(__name__)
 
 
-def init_session_state():
+def init_session_state() -> None:
     """Initialize session state variables"""
     if "current_path" not in st.session_state:
         st.session_state.current_path = os.path.expanduser("~")
@@ -69,7 +69,7 @@ def list_remote_directory_contents(remote_path: str) -> list[dict]:
     return sorted(contents, key=lambda x: (not x["is_dir"], x["name"]))
 
 
-def list_directory_contents(path):
+def list_directory_contents(path: str) -> list[dict]:
     """List contents of a local directory"""
     try:
         contents = []
@@ -94,7 +94,7 @@ def list_directory_contents(path):
         return []
 
 
-def download_files_as_zip(file_paths):
+def download_files_as_zip(file_paths: list) -> BytesIO | None:
     """Download multiple files as a ZIP archive"""
     try:
         if not file_paths:
@@ -136,7 +136,7 @@ def download_files_as_zip(file_paths):
         return None
 
 
-def main_app():
+def main_app() -> None:
     """Main Streamlit application"""
     st.set_page_config(page_title="Rclone Manager Web UI", layout="wide")
     init_session_state()
