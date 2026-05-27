@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import subprocess
+import sys
 
 from rich.console import Console
 from rich.table import Table
@@ -12,6 +13,19 @@ logger = logging.getLogger(__name__)
 
 
 # ── helpers (duplicated minimally to avoid circular imports) ──────────────────
+
+
+def _is_windows() -> bool:
+    return sys.platform == "win32"
+
+
+def _is_mount_point(path: str) -> bool:
+    """Cross-platform mount point check."""
+    if os.path.ismount(path):
+        return True
+    if _is_windows():
+        return os.path.isdir(path)
+    return False
 
 
 def _get_mount_base() -> str:
@@ -107,7 +121,7 @@ def show_status():
         active_mounts = [
             d
             for d in os.listdir(mount_base)
-            if os.path.ismount(os.path.join(mount_base, d))
+            if _is_mount_point(os.path.join(mount_base, d))
         ]
 
     if active_mounts:

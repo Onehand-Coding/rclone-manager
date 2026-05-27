@@ -26,6 +26,7 @@ A powerful Python CLI tool that simplifies rclone operations with an intuitive i
 - [rclone](https://rclone.org/downloads/) installed and configured
 - [uv](https://docs.astral.sh/uv/) package manager (recommended)
 - [fzf](https://github.com/junegunn/fzf) (optional, recommended for fuzzy search)
+- **Windows only:** [WinFsp](https://winfsp.dev) required for `rman mount` (kernel driver for FUSE support)
 
 ## Installation
 

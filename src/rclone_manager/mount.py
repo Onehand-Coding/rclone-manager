@@ -4,6 +4,7 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 
 from rich.console import Console
@@ -27,6 +28,10 @@ UNSUPPORTED_NAMES = ("gphotos", "google photos", "cloudinary")
 # ── internal helpers ──────────────────────────────────────────────────────────
 
 
+def _is_windows() -> bool:
+    return sys.platform == "win32"
+
+
 def _get_mount_base() -> str:
     return os.path.expanduser(
         os.environ.get("RMAN_MOUNT_DIR", os.environ.get("MOUNT_DIR", "~/mnt"))
@@ -38,6 +43,15 @@ def _fusermount_cmd() -> str:
     return "fusermount3" if shutil.which("fusermount3") else "fusermount"
 
 
+def _is_mount_active(mount_point: str, proc: subprocess.Popen | None = None) -> bool:
+    """Cross-platform check if a mount point is active."""
+    if os.path.ismount(mount_point):
+        return True
+    if _is_windows() and proc is not None and proc.poll() is None:
+        return os.path.isdir(mount_point)
+    return False
+
+
 def _find_free_port(start: int = 5572) -> int:
     """Find a free TCP port starting from start."""
     port = start
@@ -47,6 +61,30 @@ def _find_free_port(start: int = 5572) -> int:
                 return port
         port += 1
     return start
+
+
+def _get_registry_entry(registry: dict, name: str) -> tuple:
+    """Extract (rc_port, pid) from registry. Handles old format (int) and new format (dict)."""
+    entry = registry.get(name)
+    if isinstance(entry, dict):
+        return entry.get("rc_port"), entry.get("pid")
+    return entry, None  # old format: just the port number
+
+
+def _unmount_via_rc(rc_port: int, mount_point: str) -> bool:
+    """Try to unmount via rclone rc API. Works cross-platform."""
+    try:
+        result = subprocess.run(
+            ["rclone", "rc", "mount/unmount", f"--rc-addr=127.0.0.1:{rc_port}",
+             f"mountPoint={mount_point}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode == 0:
+            return True
+        logger.debug(f"rc unmount failed: {result.stderr.strip()}")
+    except Exception as e:
+        logger.debug(f"rc unmount error: {e}")
+    return False
 
 
 def _rc_stats(port: int) -> dict | None:
@@ -173,7 +211,14 @@ def mount_remote():
     - Polls os.path.ismount() to confirm mount is ready
     - Saves rc port registry for use by unmount
     """
-    if not shutil.which("fusermount3") and not shutil.which("fusermount"):
+    if _is_windows():
+        if not shutil.which("rclone"):
+            console.print(
+                "[bold red]❌ rclone not found. Please install it.[/bold red]"
+            )
+            return
+        # WinFsp is a kernel driver — rclone will error clearly if missing
+    elif not shutil.which("fusermount3") and not shutil.which("fusermount"):
         console.print(
             "[bold red]❌ FUSE not available on this system. "
             "Use serve-remote instead.[/bold red]"
@@ -218,7 +263,7 @@ def mount_remote():
         mount_point = os.path.join(mount_base, mount_key)
 
         # Skip if already mounted
-        if os.path.ismount(mount_point):
+        if _is_mount_active(mount_point):
             console.print(
                 f"[yellow]⚠️  {remote} is already mounted at {mount_point}. Skipping.[/yellow]"
             )
@@ -256,14 +301,14 @@ def mount_remote():
         with console.status(f"[dim]Waiting for {remote} to mount...[/dim]"):
             for _ in range(30):
                 time.sleep(1)
-                if os.path.ismount(mount_point):
+                if _is_mount_active(mount_point, proc):
                     mounted = True
                     break
                 if proc.poll() is not None:
                     break  # process exited early — failed
 
         if mounted:
-            registry[mount_key] = rc_port
+            registry[mount_key] = {"rc_port": rc_port, "pid": proc.pid}
             console.print(
                 f"[bold green]✅ Mounted {remote} → {mount_point} "
                 f"(rc port {rc_port})[/bold green]"
@@ -287,7 +332,8 @@ def unmount_remote():
     """
     Unmount active rclone mounts.
     - Checks for pending uploads before unmounting (if rc available)
-    - Falls back to lazy unmount (-uz) if normal unmount fails
+    - Tries rclone rc mount/unmount first (cross-platform)
+    - Falls back to fusermount (Unix) or taskkill (Windows)
     - Cleans up empty mount point directories and registry entries
     """
     mount_base = _get_mount_base()
@@ -299,7 +345,7 @@ def unmount_remote():
     active = [
         d
         for d in os.listdir(mount_base)
-        if os.path.ismount(os.path.join(mount_base, d))
+        if _is_mount_active(os.path.join(mount_base, d))
     ]
 
     if not active:
@@ -323,7 +369,7 @@ def unmount_remote():
 
     for name in to_unmount:
         mp = os.path.join(mount_base, name)
-        rc_port = registry.get(name)
+        rc_port, pid = _get_registry_entry(registry, name)
 
         # Check pending uploads before unmounting
         if rc_port:
@@ -332,29 +378,67 @@ def unmount_remote():
                 console.print(f"[dim]Skipped {name}.[/dim]")
                 continue
 
-        # Attempt clean unmount
-        result = subprocess.run([fusermount, "-u", mp], capture_output=True, text=True)
+        unmounted = False
 
-        if result.returncode == 0:
-            console.print(f"[green]✅ Unmounted {mp}[/green]")
-            _finalize_unmount(mp, name)
-        else:
-            error = result.stderr.strip()
-            console.print(
-                f"[yellow]⚠️  Clean unmount failed: {error}. Trying lazy unmount...[/yellow]"
-            )
-
-            # Fallback: lazy unmount (-uz detaches even if busy)
-            lazy = subprocess.run(
-                [fusermount, "-uz", mp], capture_output=True, text=True
-            )
-            if lazy.returncode == 0:
-                console.print(f"[yellow]⚠️  Lazy unmount succeeded for {mp}[/yellow]")
+        # Try rc-based unmount first (works on all platforms when rc available)
+        if rc_port:
+            console.print("[dim]Unmounting via rc...[/dim]")
+            if _unmount_via_rc(rc_port, mp):
+                console.print(f"[green]✅ Unmounted {mp}[/green]")
                 _finalize_unmount(mp, name)
+                unmounted = True
+
+        # Fall back to platform-specific unmount
+        if not unmounted:
+            if _is_windows():
+                if pid:
+                    result = subprocess.run(
+                        ["taskkill", "/F", "/PID", str(pid)],
+                        capture_output=True, text=True,
+                    )
+                    if result.returncode == 0:
+                        console.print(f"[green]✅ Unmounted {mp}[/green]")
+                        _finalize_unmount(mp, name)
+                        unmounted = True
+                    else:
+                        console.print(
+                            f"[red]❌ Failed to unmount {mp}: "
+                            f"{result.stderr.strip()}[/red]"
+                        )
+                else:
+                    console.print(
+                        f"[yellow]⚠️  No PID recorded for {name}. "
+                        f"Kill rclone.exe manually in Task Manager.[/yellow]"
+                    )
             else:
-                console.print(
-                    f"[red]❌ Failed to unmount {mp}: {lazy.stderr.strip()}[/red]"
+                # Unix: fusermount
+                result = subprocess.run(
+                    [fusermount, "-u", mp], capture_output=True, text=True
                 )
+                if result.returncode == 0:
+                    console.print(f"[green]✅ Unmounted {mp}[/green]")
+                    _finalize_unmount(mp, name)
+                    unmounted = True
+                else:
+                    error = result.stderr.strip()
+                    console.print(
+                        f"[yellow]⚠️  Clean unmount failed: {error}. "
+                        f"Trying lazy unmount...[/yellow]"
+                    )
+                    lazy = subprocess.run(
+                        [fusermount, "-uz", mp], capture_output=True, text=True
+                    )
+                    if lazy.returncode == 0:
+                        console.print(
+                            f"[yellow]⚠️  Lazy unmount succeeded for {mp}[/yellow]"
+                        )
+                        _finalize_unmount(mp, name)
+                        unmounted = True
+                    else:
+                        console.print(
+                            f"[red]❌ Failed to unmount {mp}: "
+                            f"{lazy.stderr.strip()}[/red]"
+                        )
 
 
 def _finalize_unmount(mp: str, name: str):
