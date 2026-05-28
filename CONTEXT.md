@@ -22,6 +22,7 @@
 - core.py split into 5 focused modules (273 lines, down from 1308)
 - utils.py split into 6 focused modules (99 lines, down from 726)
 - FakeCommandRunner supports popen() via _FakePopen wrapper
+- Stderr-based mount verification catches delayed FUSE failures on Windows
 
 **Needs Work / Known Issues:**
 - **Web UI auth is cosmetic** — session-state only, no server-side validation
@@ -29,7 +30,7 @@
 - **stats.py (17%), sync.py (39%) need more tests**
 
 **Recent Work:**
-- 2026-05-27 — QA audit: wrote 131 new tests (127→250 total). remote_ops.py 34→99%, sync_pairs.py 29→100%, webui.py 0→25%. Added type hints to webui.py. Added integration-tests job to CI pipeline. 64% total coverage.
+- 2026-05-28 — Fixed false-positive mount detection on Windows (rclone opens rc port before attempting WinFsp FUSE mount, causing ✅ with broken mount). Added stderr capture thread + post-mount verification to detect "Fatal error" in rclone output. Added pre-flight WinFsp DLL check on Windows (checks System32 and Program Files\WinFsp\bin for SxS installations). (`mount.py:43-56, 191-222, 296-347`)
 
 **Blockers:**
 - None

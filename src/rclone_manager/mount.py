@@ -4,6 +4,7 @@ import os
 import shutil
 import socket
 import subprocess
+import threading
 import time
 
 from .ports import CommandRunner, OutputPort, RealCommandRunner, RichOutput
@@ -37,6 +38,22 @@ def _is_mount_active(mount_point: str, proc: subprocess.Popen | None = None) -> 
     if _is_windows() and proc is not None and proc.poll() is None:
         return os.path.isdir(mount_point)
     return False
+
+
+def _capture_stderr_lines(
+    stream, lines_list: list, lock: threading.Lock
+) -> None:
+    """Read lines from a stream into a list (runs in daemon thread)."""
+    try:
+        while True:
+            raw = stream.readline()
+            if not raw:
+                break
+            line = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
+            with lock:
+                lines_list.append(line)
+    except (ValueError, OSError):
+        pass
 
 
 def _find_free_port(start: int = 5572) -> int:
@@ -171,7 +188,38 @@ def mount_remote():
                 "[bold red]❌ rclone not found. Please install it.[/bold red]"
             )
             return
-        # WinFsp is a kernel driver — rclone will error clearly if missing
+        winfsp_dll = next(
+            (
+                p
+                for p in (
+                    os.path.join(
+                        os.environ.get("SystemRoot", "C:\\Windows"),
+                        "System32",
+                        "winfsp-x64.dll",
+                    ),
+                    os.path.join(
+                        os.environ.get("ProgramFiles", "C:\\Program Files"),
+                        "WinFsp",
+                        "bin",
+                        "winfsp-x64.dll",
+                    ),
+                    os.path.join(
+                        os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"),
+                        "WinFsp",
+                        "bin",
+                        "winfsp-x64.dll",
+                    ),
+                )
+                if os.path.exists(p)
+            ),
+            None,
+        )
+        if winfsp_dll is None:
+            console.print(
+                "[bold red]❌ WinFsp not found. rclone mount requires WinFsp on Windows.\n"
+                "  Install from: https://winfsp.dev/rel/[/bold red]"
+            )
+            return
     elif not shutil.which("fusermount3") and not shutil.which("fusermount"):
         console.print(
             "[bold red]❌ FUSE not available on this system. "
@@ -212,16 +260,34 @@ def mount_remote():
 
     registry = _load_registry()
 
+    any_mounted = False
+
     for remote, remote_type in valid:
         mount_key = remote.replace(" ", "_")
         mount_point = os.path.join(mount_base, mount_key)
 
         # Skip if already mounted
-        if _is_mount_active(mount_point):
+        already_mounted = _is_mount_active(mount_point)
+        # On Windows, also check registry entry + verify PID is alive
+        if not already_mounted and mount_key in registry:
+            entry = registry[mount_key]
+            if isinstance(entry, dict):
+                pid = entry.get("pid")
+                if pid is not None:
+                    try:
+                        os.kill(pid, 0)
+                        already_mounted = os.path.exists(mount_point)
+                    except OSError:
+                        already_mounted = False  # stale entry
+            else:
+                already_mounted = False
+        if already_mounted:
             console.print(
                 f"[yellow]⚠️  {remote} is already mounted at {mount_point}. Skipping.[/yellow]"
             )
             continue
+
+        any_mounted = True
 
         # Clean up stale empty dir if present
         if os.path.exists(mount_point):
@@ -229,7 +295,9 @@ def mount_remote():
                 os.rmdir(mount_point)
             except OSError:
                 pass  # non-empty, leave it
-        os.makedirs(mount_point, exist_ok=True)
+        # Windows: WinFsp creates the mountpoint itself. Linux: create it.
+        if not _is_windows():
+            os.makedirs(mount_point, exist_ok=True)
 
         flags = get_rclone_flags(remote_type)
         rc_port = _find_free_port(5572)
@@ -248,7 +316,20 @@ def mount_remote():
         )
         console.print(f"[dim]Command: {' '.join(sanitize_command(command))}[/dim]")
 
-        proc = _runner.popen(command)
+        proc = _runner.popen(
+            command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE
+        )
+
+        # Capture stderr in background to detect FUSE mount errors (e.g. on Windows)
+        stderr_lines: list[str] = []
+        stderr_lock = threading.Lock()
+        if proc.stderr is not None:
+            stderr_thread = threading.Thread(
+                target=_capture_stderr_lines,
+                args=(proc.stderr, stderr_lines, stderr_lock),
+                daemon=True,
+            )
+            stderr_thread.start()
 
         # Poll until mounted or process dies
         mounted = False
@@ -261,6 +342,32 @@ def mount_remote():
                 if proc.poll() is not None:
                     break  # process exited early — failed
 
+        # On Windows, also verify rc is responding to avoid false positives
+        if mounted and _is_windows():
+            try:
+                result = _runner.run(
+                    ["rclone", "rc", "core/version", f"--rc-addr=127.0.0.1:{rc_port}"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if result.returncode != 0:
+                    mounted = False
+            except Exception:
+                mounted = False
+
+        # Post-mount verification: check for FUSE errors in stderr
+        if mounted:
+            time.sleep(2)
+            with stderr_lock:
+                stderr_text = "".join(stderr_lines)
+            if stderr_text and any(
+                t in stderr_text.lower()
+                for t in ("fatal error", "critical:")
+            ):
+                mounted = False
+                console.print(
+                    f"[bold red]❌ rclone mount error: {stderr_text.strip()}[/bold red]"
+                )
+
         if mounted:
             registry[mount_key] = {"rc_port": rc_port, "pid": proc.pid}
             console.print(
@@ -268,9 +375,10 @@ def mount_remote():
                 f"(rc port {rc_port})[/bold green]"
             )
         else:
+            exit_code = proc.returncode if proc.returncode is not None else "unknown"
             console.print(
                 f"[bold red]❌ Failed to mount {remote}. "
-                f"Exit code: {proc.returncode}[/bold red]"
+                f"Exit code: {exit_code}[/bold red]"
             )
             proc.terminate()
             try:
@@ -279,7 +387,8 @@ def mount_remote():
                 pass
 
     _save_registry(registry)
-    console.print("\n[dim]To unmount: rman unmount[/dim]")
+    if any_mounted:
+        console.print("\n[dim]To unmount: rman unmount[/dim]")
 
 
 def unmount_remote():
@@ -291,39 +400,74 @@ def unmount_remote():
     - Cleans up empty mount point directories and registry entries
     """
     mount_base = _get_mount_base()
+    registry = _load_registry()
 
     if not os.path.exists(mount_base):
+        # Check for stale registry entries with no mount base dir
+        stale_registry = [k for k in registry if not os.path.exists(os.path.join(mount_base, k))]
+        if stale_registry:
+            for name in stale_registry:
+                _remove_from_registry(name)
+            console.print(
+                f"[dim]Cleaned up {len(stale_registry)} stale registry entr{'y' if len(stale_registry) == 1 else 'ies'}.[/dim]"
+            )
         console.print("[yellow]No mounts directory found.[/yellow]")
         return
 
+    existing = os.listdir(mount_base)
     active = [
-        d
-        for d in os.listdir(mount_base)
+        d for d in existing
         if _is_mount_active(os.path.join(mount_base, d))
     ]
+    stale = [
+        d for d in existing
+        if d not in active and d in registry
+    ]
 
-    if not active:
-        console.print("[yellow]No active mounts found.[/yellow]")
+    if not active and not stale:
+        # Clean up any registry-only entries (dir already gone)
+        stale_registry = [k for k in registry if not os.path.exists(os.path.join(mount_base, k))]
+        for name in stale_registry:
+            _remove_from_registry(name)
+        if stale_registry:
+            console.print(
+                f"[dim]Cleaned up {len(stale_registry)} stale registry entr{'y' if len(stale_registry) == 1 else 'ies'}.[/dim]"
+            )
+        console.print("[yellow]No mounts to unmount.[/yellow]")
         return
 
-    options = ["All"] + active
+    options = ["All"]
+    options.extend(active)
+    for s in stale:
+        options.append(f"{s} (stale)")
     selected = choose_from_list(options, "Select mount(s) to unmount:", multi=True)
     if not selected:
         return
 
+    registry = _load_registry()
+
+    def _strip_stale(n: str) -> str:
+        return n.replace(" (stale)", "")
+
     if selected == "All":
-        to_unmount = active
+        to_unmount = active + [f"{s} (stale)" for s in stale]
     elif isinstance(selected, list):
         to_unmount = selected
     else:
         to_unmount = [selected]
 
-    registry = _load_registry()
     fusermount = _fusermount_cmd()
 
-    for name in to_unmount:
+    for raw_name in to_unmount:
+        is_stale = raw_name.endswith(" (stale)")
+        name = _strip_stale(raw_name)
         mp = os.path.join(mount_base, name)
         rc_port, pid = _get_registry_entry(registry, name)
+
+        if is_stale:
+            console.print(f"[dim]Cleaning up stale mount {name}...[/dim]")
+            _finalize_unmount(mp, name)
+            continue
 
         # Check pending uploads before unmounting
         if rc_port:
