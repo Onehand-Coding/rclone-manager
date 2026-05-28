@@ -1,13 +1,14 @@
 import os
+import sys
 
 from rclone_manager.ports import CommandResult
 
 
 class TestHelpers:
-    def test_is_windows_returns_false_on_linux(self):
+    def test_is_windows_returns_true_on_windows(self):
         from rclone_manager.mount import _is_windows
 
-        assert _is_windows() is False
+        assert _is_windows() is (sys.platform == "win32")
 
     def test_get_mount_base_uses_env_var(self, monkeypatch):
         from rclone_manager.mount import _get_mount_base
@@ -50,8 +51,10 @@ class TestHelpers:
     def test_registry_path_uses_mount_base(self, monkeypatch):
         from rclone_manager.mount import _registry_path
 
+        import os as os_module
         monkeypatch.setenv("MOUNT_DIR", "/tmp/rman_test")
-        assert _registry_path() == "/tmp/rman_test/.rc_ports.json"
+        expected = os_module.path.join("/tmp/rman_test", ".rc_ports.json")
+        assert _registry_path() == expected
 
     def test_load_registry_returns_empty_when_no_file(self, monkeypatch):
         from rclone_manager.mount import _load_registry
@@ -303,7 +306,7 @@ class TestUnmountRemote:
         monkeypatch.setattr(mount, "console", test_output)
 
         mount.unmount_remote()
-        assert any("No active mounts" in m for m in test_output.messages)
+        assert any("No mounts to unmount" in m for m in test_output.messages)
 
     def test_unmount_via_rc_success(self, monkeypatch, tmp_path, test_output, fake_runner):
         from rclone_manager import mount

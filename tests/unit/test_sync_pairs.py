@@ -12,12 +12,14 @@ from rclone_manager.ports import CommandResult
 
 class TestConfigPath:
     def test_returns_correct_path(self, monkeypatch):
+        import os as _os
         monkeypatch.setattr(
             "rclone_manager.config.get_project_root", lambda: "/project"
         )
         from rclone_manager.sync_pairs import _config_path
 
-        assert _config_path() == "/project/configs/sync-pairs.json"
+        expected = _os.path.join("/project", "configs", "sync-pairs.json")
+        assert _config_path() == expected
 
 
 # ---------------------------------------------------------------------------
@@ -164,7 +166,8 @@ class TestBuildCommand:
         assert "--resync" in cmd
 
     def test_two_way_with_resync_done(self, monkeypatch):
-        monkeypatch.setattr("os.name", "posix")
+        import rclone_manager.sync_pairs as _sp
+        monkeypatch.setattr(_sp, "os", type("os", (), {"name": "posix"})())
         from rclone_manager.sync_pairs import _build_command
 
         pair = {

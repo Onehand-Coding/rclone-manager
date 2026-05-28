@@ -1,13 +1,14 @@
 import json
 import os
+import sys
 
 
 
 class TestHelpers:
-    def test_is_windows_returns_false_on_linux(self):
+    def test_is_windows_returns_true_on_windows(self):
         from rclone_manager.status import _is_windows
 
-        assert _is_windows() is False
+        assert _is_windows() is (sys.platform == "win32")
 
     def test_is_mount_point_checks_ismount(self, monkeypatch):
         from rclone_manager.status import _is_mount_point
