@@ -18,7 +18,7 @@ class OutputPort(Protocol):
 
     def rule(self, title: str = "") -> None: ...
 
-    def input(self, prompt: str = "") -> str: ...
+    def input(self, prompt: str = "", default: str = "") -> str: ...
 
 
 class CommandRunner(Protocol):
@@ -48,9 +48,9 @@ class RichOutput:
     def rule(self, title: str = "") -> None:
         self._console.rule(title)
 
-    def input(self, prompt: str = "") -> str:
+    def input(self, prompt: str = "", default: str = "") -> str:
         from rich.prompt import Prompt
-        return Prompt.ask(prompt)
+        return Prompt.ask(prompt, default=default)
 
 
 class RealCommandRunner:
