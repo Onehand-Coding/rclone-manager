@@ -23,6 +23,7 @@
 - utils.py split into 6 focused modules (99 lines, down from 726)
 - FakeCommandRunner supports popen() via _FakePopen wrapper
 - Stderr-based mount verification catches delayed FUSE failures on Windows
+- Stale/disconnected FUSE mount cleanup on remount and during unmount finalization
 
 **Needs Work / Known Issues:**
 - **Web UI auth is cosmetic** — session-state only, no server-side validation
@@ -31,6 +32,7 @@
 
 **Recent Work:**
 - 2026-05-28 — Fixed false-positive mount detection on Windows (rclone opens rc port before attempting WinFsp FUSE mount, causing ✅ with broken mount). Added stderr capture thread + post-mount verification to detect "Fatal error" in rclone output. Added pre-flight WinFsp DLL check on Windows (checks System32 and Program Files\WinFsp\bin for SxS installations). (`mount.py:43-56, 191-222, 296-347`)
+- 2026-06-02 — Fixed stale/disconnected FUSE mount handling: `os.path.exists()` returns `False` for stale mounts (ENOTCONN on stat), so cleanup was skipped and `os.makedirs` raised `FileExistsError`. Added try/except in `mount_remote` to detect stale mounts and run `fusermount -uz` before retrying. Also fixed `_finalize_unmount` to attempt lazy unmount when `os.rmdir` fails on a stale mount. (`mount.py:292-315, 555-570`)
 
 **Blockers:**
 - None

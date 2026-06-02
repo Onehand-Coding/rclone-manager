@@ -289,15 +289,28 @@ def mount_remote():
 
         any_mounted = True
 
-        # Clean up stale empty dir if present
+        # Clean up stale mount point if present
         if os.path.exists(mount_point):
             try:
                 os.rmdir(mount_point)
             except OSError:
-                pass  # non-empty, leave it
+                if not os.path.isdir(mount_point):
+                    try:
+                        os.remove(mount_point)
+                    except OSError:
+                        pass
         # Windows: WinFsp creates the mountpoint itself. Linux: create it.
         if not _is_windows():
-            os.makedirs(mount_point, exist_ok=True)
+            try:
+                os.makedirs(mount_point, exist_ok=True)
+            except FileExistsError:
+                # Stale/disconnected FUSE mount: exists in VFS but can't be stat'd
+                fusermount = _fusermount_cmd()
+                _runner.run(
+                    [fusermount, "-uz", mount_point],
+                    capture_output=True, text=True,
+                )
+                os.makedirs(mount_point, exist_ok=True)
 
         flags = get_rclone_flags(remote_type)
         rc_port = _find_free_port(5572)
@@ -545,5 +558,16 @@ def _finalize_unmount(mp: str, name: str):
         os.rmdir(mp)
         console.print(f"[dim]Removed {mp}[/dim]")
     except OSError:
-        pass
+        # May be a stale FUSE mount - try lazy unmount first
+        if not _is_windows():
+            fusermount = _fusermount_cmd()
+            _runner.run(
+                [fusermount, "-uz", mp],
+                capture_output=True, text=True,
+            )
+            try:
+                os.rmdir(mp)
+                console.print(f"[dim]Removed {mp}[/dim]")
+            except OSError:
+                pass
     _remove_from_registry(name)
