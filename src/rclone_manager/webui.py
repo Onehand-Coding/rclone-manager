@@ -78,19 +78,23 @@ def list_directory_contents(path: str) -> list[dict]:
             if not st.session_state.show_hidden and item.startswith("."):
                 continue
             item_path = os.path.join(path, item)
-            is_dir = os.path.isdir(item_path)
-            size = "-" if is_dir else f"{os.path.getsize(item_path)} bytes"
+            try:
+                is_dir = os.path.isdir(item_path)
+                size = "-" if is_dir else f"{os.path.getsize(item_path)} bytes"
+                modified = time.ctime(os.path.getmtime(item_path))
+            except (OSError, FileNotFoundError):
+                continue
             contents.append(
                 {
                     "name": item,
                     "is_dir": is_dir,
                     "size": size,
-                    "modified": time.ctime(os.path.getmtime(item_path)),
+                    "modified": modified,
                 }
             )
         return sorted(contents, key=lambda x: (not x["is_dir"], x["name"]))
-    except PermissionError:
-        st.error(f"Permission denied accessing: {path}")
+    except (PermissionError, FileNotFoundError):
+        st.error(f"Permission denied or path not found: {path}")
         return []
 
 
