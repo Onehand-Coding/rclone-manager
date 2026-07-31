@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import subprocess
-from typing import Any, ContextManager, List, Protocol
+from typing import Any, ContextManager, List, Optional, Protocol
 
 
 class CommandResult:
@@ -18,7 +18,12 @@ class OutputPort(Protocol):
 
     def rule(self, title: str = "") -> None: ...
 
-    def input(self, prompt: str = "", default: str = "") -> str: ...
+    def input(
+        self,
+        prompt: str = "",
+        default: str = "",
+        choices: Optional[List[str]] = None,
+    ) -> str: ...
 
 
 class CommandRunner(Protocol):
@@ -48,9 +53,14 @@ class RichOutput:
     def rule(self, title: str = "") -> None:
         self._console.rule(title)
 
-    def input(self, prompt: str = "", default: str = "") -> str:
+    def input(
+        self,
+        prompt: str = "",
+        default: str = "",
+        choices: Optional[List[str]] = None,
+    ) -> str:
         from rich.prompt import Prompt
-        return Prompt.ask(prompt, default=default)
+        return Prompt.ask(prompt, default=default, choices=choices)
 
 
 class RealCommandRunner:
