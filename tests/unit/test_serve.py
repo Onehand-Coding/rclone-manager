@@ -6,8 +6,20 @@ class _NoLiveStatus(_TestOutput):
         raise RuntimeError("serve threads must not use console.status()")
 
 
+class _RecordingStatus(_TestOutput):
+    def __init__(self):
+        super().__init__()
+        self.status_calls = 0
+        self.status_messages: list = []
+
+    def status(self, message: str = ""):
+        self.status_calls += 1
+        self.status_messages.append(message)
+        return super().status(message)
+
+
 class TestServeRemote:
-    def test_serve_thread_prints_status_without_shared_live(self, monkeypatch, fake_runner):
+    def test_serve_thread_does_not_use_shared_live(self, monkeypatch, fake_runner):
         out = _NoLiveStatus()
         monkeypatch.setattr("rclone_manager.serve.console", out)
         monkeypatch.setattr("rclone_manager.serve._runner", fake_runner)
@@ -17,7 +29,34 @@ class TestServeRemote:
         from rclone_manager.serve import _serve_remote_thread
 
         _serve_remote_thread("myremote", "http", 8080, "user", "pass", False)
-        assert any("Serving myremote" in m for m in out.messages)
+        assert any("Starting server" in m for m in out.messages)
+
+    def test_serve_remote_uses_single_status_for_all_threads(
+        self, monkeypatch, fake_runner
+    ):
+        out = _RecordingStatus()
+        monkeypatch.setattr("rclone_manager.serve.console", out)
+        monkeypatch.setattr(
+            "rclone_manager.serve.list_rclone_remotes", lambda: ["r1", "r2"]
+        )
+        monkeypatch.setattr("rclone_manager.serve.get_remote_type", lambda r: "drive")
+        monkeypatch.setattr(
+            "rclone_manager.serve.choose_from_list",
+            lambda *a, **kw: ["r1", "r2"] if kw.get("multi") else "http",
+        )
+        monkeypatch.setattr("rclone_manager.serve._runner", fake_runner)
+        monkeypatch.setattr("rclone_manager.serve.get_rclone_flags", lambda t: [])
+        monkeypatch.setenv("PASSWORD", "secret")
+        out.add_input_response("y")
+        out.add_input_response("y")
+        for _ in range(4):
+            fake_runner.add_response(CommandResult(0))
+
+        from rclone_manager.serve import serve_remote
+
+        serve_remote()
+        assert out.status_calls == 1
+        assert any("Serving" in m for m in out.status_messages)
 
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
         monkeypatch.setattr("rclone_manager.serve.console", test_output)

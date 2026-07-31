@@ -37,9 +37,16 @@ def serve_remote():
     port = int(os.environ.get("DEFAULT_PORT", 8080))
 
     for remote in selected_remotes:
-        jobs_to_run.append({"remote": remote, "port": port, "shared": False})
-
         remote_type = get_remote_type(remote)
+        jobs_to_run.append(
+            {
+                "remote": remote,
+                "port": port,
+                "shared": False,
+                "remote_type": remote_type,
+            }
+        )
+
         if remote_type == "drive":
             serve_shared = console.input(
                 f"[yellow]Serve shared drive for '{remote}' as well? (y/n)[/yellow]",
@@ -47,7 +54,14 @@ def serve_remote():
                 default="y",
             )
             if serve_shared == "y":
-                jobs_to_run.append({"remote": remote, "port": port + 1, "shared": True})
+                jobs_to_run.append(
+                    {
+                        "remote": remote,
+                        "port": port + 1,
+                        "shared": True,
+                        "remote_type": remote_type,
+                    }
+                )
                 port += 2
             else:
                 port += 1
@@ -79,8 +93,15 @@ def serve_remote():
         threads.append(thread)
         thread.start()
 
-    for thread in threads:
-        thread.join()
+    display_names = [
+        f"{job['remote']} (Shared)"
+        if job["shared"] and job["remote_type"] == "drive"
+        else job["remote"]
+        for job in jobs_to_run
+    ]
+    with console.status(f"[dim]Serving {', '.join(display_names)}...[/dim]"):
+        for thread in threads:
+            thread.join()
 
 
 def _serve_remote_thread(
@@ -121,7 +142,6 @@ def _serve_remote_thread(
     safe_cmd = sanitize_command(command)
     console.print(f"[dim]Command: {' '.join(safe_cmd)}[/dim]")
 
-    console.print(f"[dim]Serving {display_name}...[/dim]")
     try:
         _runner.run(command, check=True, env=serve_env)
     except subprocess.CalledProcessError as e:
