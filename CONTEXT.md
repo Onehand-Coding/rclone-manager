@@ -31,6 +31,7 @@
 - **stats.py (17%), sync.py (39%) need more tests**
 
 **Recent Work:**
+- 2026-07-31 — Fixed `rich.errors.LiveError: Only one live display may be active at once` crash in `serve-remote` with multiple remotes (or drive shared drive). Each serve thread called `console.status()` on the same shared Rich console; Rich only allows one Live per console. Replaced the status context in `_serve_remote_thread` with a static `Serving X...` print — equivalent since `rclone serve` blocks indefinitely. (`serve.py:124`)
 - 2026-07-31 — Fixed `TypeError: RichOutput.input() got an unexpected keyword argument 'choices'` crash in `serve-remote` (and other flows passing `choices` to `console.input`). Added `choices` param to `OutputPort.input()` protocol and `RichOutput.input()`, forwarding to `Prompt.ask`. (`ports.py:21-26, 56-62`)
 - 2026-06-04 — Fixed `FileNotFoundError` crash in Web UI local file browser when Windows virtual shell folders (e.g., "My Documents") appear in `os.listdir()` but fail on stat. Wrapped per-item filesystem calls in try/except to skip inaccessible entries. (`webui.py:80-86`)
 - 2026-06-02 — Fixed `console.input("Exclude patterns", default="")` crash in `download_backup` and `upload_backup` (Rich `Prompt.ask` supports `default` but `RichOutput.input()` wrapper didn't expose it). Added `default` parameter to `OutputPort.input()` protocol and `RichOutput.input()`. (`ports.py:21,51`)

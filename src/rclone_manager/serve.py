@@ -121,17 +121,17 @@ def _serve_remote_thread(
     safe_cmd = sanitize_command(command)
     console.print(f"[dim]Command: {' '.join(safe_cmd)}[/dim]")
 
-    with console.status(f"[dim]Serving {display_name}...[/dim]"):
-        try:
-            _runner.run(command, check=True, env=serve_env)
-        except subprocess.CalledProcessError as e:
-            stderr = (
-                e.stderr
-                if isinstance(e.stderr, str)
-                else e.stderr.decode("utf-8", errors="replace")
-            )
-            console.print(f"[bold red]Error serving {remote_path}: {stderr}[/bold red]")
-            logger.error(f"Failed to serve {remote_path}: {e}")
+    console.print(f"[dim]Serving {display_name}...[/dim]")
+    try:
+        _runner.run(command, check=True, env=serve_env)
+    except subprocess.CalledProcessError as e:
+        stderr = (
+            e.stderr
+            if isinstance(e.stderr, str)
+            else e.stderr.decode("utf-8", errors="replace")
+        )
+        console.print(f"[bold red]Error serving {remote_path}: {stderr}[/bold red]")
+        logger.error(f"Failed to serve {remote_path}: {e}")
 
 
 def serve_local():

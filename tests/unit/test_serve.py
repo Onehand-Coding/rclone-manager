@@ -1,7 +1,24 @@
-from rclone_manager.ports import CommandResult
+from rclone_manager.ports import CommandResult, TestOutput as _TestOutput
+
+
+class _NoLiveStatus(_TestOutput):
+    def status(self, message: str = ""):
+        raise RuntimeError("serve threads must not use console.status()")
 
 
 class TestServeRemote:
+    def test_serve_thread_prints_status_without_shared_live(self, monkeypatch, fake_runner):
+        out = _NoLiveStatus()
+        monkeypatch.setattr("rclone_manager.serve.console", out)
+        monkeypatch.setattr("rclone_manager.serve._runner", fake_runner)
+        monkeypatch.setattr("rclone_manager.serve.get_remote_type", lambda r: "mega")
+        fake_runner.add_response(CommandResult(0))
+
+        from rclone_manager.serve import _serve_remote_thread
+
+        _serve_remote_thread("myremote", "http", 8080, "user", "pass", False)
+        assert any("Serving myremote" in m for m in out.messages)
+
     def test_no_remotes_prints_message(self, monkeypatch, test_output):
         monkeypatch.setattr("rclone_manager.serve.console", test_output)
         monkeypatch.setattr("rclone_manager.serve.list_rclone_remotes", lambda: [])
