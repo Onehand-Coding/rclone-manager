@@ -98,6 +98,20 @@ def list_directory_contents(path: str) -> list[dict]:
         return []
 
 
+def _zip_directory(temp_dir: str) -> BytesIO:
+    """Create an in-memory ZIP archive from the contents of a directory."""
+    zip_buffer = BytesIO()
+    with ZipFile(zip_buffer, "w") as zip_file:
+        for root, _dirs, files in os.walk(temp_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Get the relative path from temp_dir to maintain folder structure
+                rel_path = os.path.relpath(file_path, temp_dir)
+                zip_file.write(file_path, rel_path)
+    zip_buffer.seek(0)
+    return zip_buffer
+
+
 def download_files_as_zip(file_paths: list) -> BytesIO | None:
     """Download multiple files as a ZIP archive"""
     try:
@@ -122,19 +136,89 @@ def download_files_as_zip(file_paths: list) -> BytesIO | None:
 
                     shutil.copytree(file_path, dest_dir)
 
-            # Create ZIP file in memory
-            zip_buffer = BytesIO()
-            with ZipFile(zip_buffer, "w") as zip_file:
-                for root, dirs, files in os.walk(temp_dir):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        # Get the relative path from temp_dir to maintain folder structure
-                        rel_path = os.path.relpath(file_path, temp_dir)
-                        zip_file.write(file_path, rel_path)
+            return _zip_directory(temp_dir)
 
-            zip_buffer.seek(0)
-            return zip_buffer
+    except Exception as e:
+        st.error(f"Error creating ZIP: {str(e)}")
+        return None
 
+
+def _remote_item_name(remote_path: str) -> str:
+    """Return the item name for a remote path, e.g. 'remote:/a/b' -> 'b'."""
+    stripped = remote_path.rstrip("/")
+    if "/" in stripped:
+        return stripped.rsplit("/", 1)[-1]
+    return stripped.split(":", 1)[-1]
+
+
+def _remote_parent(remote_path: str) -> str:
+    """Return the parent path of a remote path, e.g. 'remote:/a/b' -> 'remote:/a'."""
+    stripped = remote_path.rstrip("/")
+    if "/" in stripped:
+        return stripped.rsplit("/", 1)[0]
+    return stripped.split(":", 1)[0] + ":"
+
+
+def _is_remote_dir(remote_path: str) -> bool:
+    """Return True if the remote path is a directory, False if it is a file."""
+    try:
+        output = subprocess.check_output(["rclone", "lsjson", remote_path]).decode(
+            "utf-8"
+        )
+        entries = json.loads(output)
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        return False
+    if not entries:
+        return True
+    # lsjson on a file returns the file itself as a single entry
+    if (
+        len(entries) == 1
+        and entries[0].get("Path") == _remote_item_name(remote_path)
+        and not entries[0].get("IsDir")
+    ):
+        # Ambiguous: a file listing itself, or a dir whose only child is a file
+        # with the same name. Check the parent's listing to disambiguate.
+        try:
+            parent_output = subprocess.check_output(
+                ["rclone", "lsjson", _remote_parent(remote_path)]
+            ).decode("utf-8")
+            parent_entries = json.loads(parent_output)
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            return False
+        name = _remote_item_name(remote_path)
+        for entry in parent_entries:
+            if entry.get("Name") == name:
+                return bool(entry.get("IsDir"))
+        return False
+    return True
+
+
+def download_remote_files_as_zip(remote_paths: list) -> BytesIO | None:
+    """Download multiple remote files/directories as a ZIP archive"""
+    try:
+        if not remote_paths:
+            st.warning("No files selected for download")
+            return None
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for remote_path in remote_paths:
+                name = _remote_item_name(remote_path)
+                if _is_remote_dir(remote_path):
+                    # Copy directory contents into a folder named after the item
+                    dest_dir = os.path.join(temp_dir, name)
+                    subprocess.run(
+                        ["rclone", "copy", remote_path, dest_dir], check=True
+                    )
+                else:
+                    # Copy file directly into the temp dir, preserving its name
+                    subprocess.run(
+                        ["rclone", "copy", remote_path, temp_dir], check=True
+                    )
+            return _zip_directory(temp_dir)
+
+    except subprocess.CalledProcessError as e:
+        st.error(f"Error downloading from remote: {str(e)}")
+        return None
     except Exception as e:
         st.error(f"Error creating ZIP: {str(e)}")
         return None
@@ -469,14 +553,22 @@ def main_app() -> None:
                         except Exception as e:
                             st.error(f"Upload failed: {str(e)}")
         else:
-            # For remote, we can add download functionality later
             st.subheader("📥 Remote Operations")
-            st.info("Download selected files from remote to local")
             if st.button(
                 "📥 Download Selected from Remote",
                 disabled=len(st.session_state.selected_files) == 0,
             ):
-                st.warning("Remote download functionality coming soon!")
+                with st.spinner("Downloading files from remote..."):
+                    zip_buffer = download_remote_files_as_zip(
+                        st.session_state.selected_files
+                    )
+                    if zip_buffer:
+                        st.download_button(
+                            label="📥 Download ZIP",
+                            data=zip_buffer,
+                            file_name="selected_files.zip",
+                            mime="application/zip",
+                        )
 
 
 if __name__ == "__main__":
