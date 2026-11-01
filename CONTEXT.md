@@ -22,9 +22,9 @@
 - Users who want a browser-based file browser for local + cloud storage
 - Users automating remote↔remote sync with persistent sync pairs (11 modes)
 
-**Current Milestone:** Maintenance — all 18 CLI commands functional, 262 unit + 4 integration tests, CI green.
+**Current Milestone:** Maintenance — all 18 CLI commands functional, 369 unit + 4 integration tests, CI green with a 75% coverage floor.
 
-**Current Development Focus:** Closing test-coverage gaps (stats.py ~17%, sync.py ~39%, webui.py ~25%).
+**Current Development Focus:** Closing remaining test-coverage gaps (mount.py ~63%, core.py ~59%, config.py ~66%, transfer.py ~66%, remote_info.py ~49%). stats.py, sync.py, and webui_launcher.py are at 100%; navigation.py is at 98% (the 2 uncovered branches require selecting the same directory twice).
 
 **Longer-Term Direction:** Server-side validation for Web UI auth (currently session-state only).
 
@@ -80,7 +80,7 @@ rclone-manager/
 ├── src/rclone_manager/      # One module per concern (see §12)
 ├── tests/
 │   ├── conftest.py          # Shared fixtures (fake_runner, test_output)
-│   ├── unit/                # 262 unit tests — mirrors src modules
+│   ├── unit/                # 369 unit tests — mirrors src modules
 │   └── integration/         # 4 integration tests (require real rclone)
 ├── .github/workflows/ci.yml
 ├── pyproject.toml
@@ -351,8 +351,9 @@ uv run pytest tests/ -v
 - Web UI downloads (local and remote) buffer the whole ZIP in memory (BytesIO) — large selections use significant RAM
 - Web UI uploads support local destinations only; remote upload not implemented
 - Web UI is single-user by design (no multi-user session isolation)
-- `main_app()` (~350 lines) is not unit-testable; only extracted helpers have coverage
-- Coverage gaps: stats.py (~17%), sync.py (~39%), webui.py (~25%)
+- `main_app()` (~350 lines) is not unit-testable; only extracted helpers have coverage, so webui.py sits at ~47%
+- `navigation.py` retains two unreachable branches (single-directory multi-select with no files); every reachable path is covered
+- CI enforces a 75% overall coverage floor
 
 ---
 

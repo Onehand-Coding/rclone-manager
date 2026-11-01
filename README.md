@@ -12,7 +12,7 @@ A powerful Python CLI tool that simplifies rclone operations with an intuitive i
 - **📊 Status Dashboard**: View active mounts with live transfer stats and sync pairs
 - **🛠️ Storage Utils**: Checksum verification, deduplication, space usage, copy-between remotes
 - **🖥️ Web UI**: Browser-based file manager (optional Streamlit)
-- **🧪 Tested**: 86 unit tests + 4 integration tests, CI pipeline
+- **🧪 Tested**: 369 unit tests + 4 integration tests, CI pipeline with a 75% coverage floor
 
 ## Supported Storage Providers
 

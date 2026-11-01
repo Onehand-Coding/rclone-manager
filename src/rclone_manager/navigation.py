@@ -218,8 +218,8 @@ def navigate_remote_file_system(
                     result_paths = []
                     dirs_to_navigate = []
                     for item in selected_items:
-                        name = item[2:].rstrip("/")
-                        full_path = current_path.rstrip("/") + "/" + name
+                        name = item[2:]
+                        full_path = current_path.rstrip("/") + "/" + name.rstrip("/")
                         if name.endswith("/"):
                             dirs_to_navigate.append(name)
                         else:
@@ -280,13 +280,16 @@ def navigate_remote_file_system(
                 elif choice == "..":
                     if current_path.strip("/") == f"{remote}:".strip("/"):
                         continue
-                    current_path = os.path.dirname(current_path.rstrip("/")) + "/"
+                    current_path = current_path.rstrip("/")
+                    current_path = current_path.rsplit("/", 1)[0] + "/"
+                    if not current_path.endswith(":"):
+                        current_path = current_path.rsplit("/", 1)[0] + "/"
                 else:
                     selected_indices = [int(i.strip()) - 1 for i in choice.split(",")]
                     selected_items = [items[i] for i in selected_indices]
 
                     if len(selected_items) == 1 and selected_items[0].endswith("/"):
-                        current_path += selected_items[0]
+                        current_path = current_path.rstrip("/") + "/" + selected_items[0]
                     else:
                         full_paths = [current_path + item for item in selected_items]
                         return full_paths[0] if len(full_paths) == 1 else full_paths

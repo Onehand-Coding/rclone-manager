@@ -274,3 +274,183 @@ class TestInitSessionState:
         assert "show_hidden" in fake_state
         assert "current_remote" in fake_state
         assert "remote_path" in fake_state
+
+
+class TestHiddenFileFiltering:
+    def test_local_hidden_files_skipped_by_default(self, monkeypatch):
+        fake_state = FakeSessionState({"show_hidden": False})
+        monkeypatch.setattr("rclone_manager.webui.st.session_state", fake_state)
+        from rclone_manager.webui import list_directory_contents
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            open(os.path.join(tmpdir, ".hidden"), "w").close()
+            open(os.path.join(tmpdir, "visible.txt"), "w").close()
+
+            names = [c["name"] for c in list_directory_contents(tmpdir)]
+
+        assert names == ["visible.txt"]
+
+    def test_local_hidden_files_shown_when_enabled(self, monkeypatch):
+        fake_state = FakeSessionState({"show_hidden": True})
+        monkeypatch.setattr("rclone_manager.webui.st.session_state", fake_state)
+        from rclone_manager.webui import list_directory_contents
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            open(os.path.join(tmpdir, ".hidden"), "w").close()
+
+            names = [c["name"] for c in list_directory_contents(tmpdir)]
+
+        assert names == [".hidden"]
+
+    def test_local_unreadable_items_are_skipped(self, monkeypatch):
+        fake_state = FakeSessionState({"show_hidden": False})
+        monkeypatch.setattr("rclone_manager.webui.st.session_state", fake_state)
+        monkeypatch.setattr(
+            "rclone_manager.webui.os.path.getsize",
+            lambda *a, **kw: (_ for _ in ()).throw(OSError("gone")),
+        )
+        from rclone_manager.webui import list_directory_contents
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            open(os.path.join(tmpdir, "broken.txt"), "w").close()
+            os.makedirs(os.path.join(tmpdir, "a_dir"), exist_ok=True)
+
+            contents = list_directory_contents(tmpdir)
+
+        assert [c["name"] for c in contents] == ["a_dir"]
+
+    def test_remote_hidden_entries_skipped_by_default(self, monkeypatch):
+        entries = [
+            {"Name": ".hidden", "IsDir": False, "Size": 1},
+            {"Name": "visible.txt", "IsDir": False, "Size": 2},
+        ]
+        monkeypatch.setattr("rclone_manager.webui.st.session_state", FakeSessionState({"show_hidden": False}))
+        monkeypatch.setattr(
+            "rclone_manager.webui.subprocess.check_output",
+            lambda *a, **kw: json.dumps(entries).encode(),
+        )
+        from rclone_manager.webui import list_remote_directory_contents
+
+        contents = list_remote_directory_contents("remote:/path")
+
+        assert [c["name"] for c in contents] == ["visible.txt"]
+        assert contents[0]["size"] == "2 bytes"
+        assert contents[0]["modified"] == "-"
+
+    def test_remote_hidden_entries_shown_when_enabled(self, monkeypatch):
+        entries = [{"Name": ".hidden", "IsDir": True, "Size": 0}]
+        monkeypatch.setattr("rclone_manager.webui.st.session_state", FakeSessionState({"show_hidden": True}))
+        monkeypatch.setattr(
+            "rclone_manager.webui.subprocess.check_output",
+            lambda *a, **kw: json.dumps(entries).encode(),
+        )
+        from rclone_manager.webui import list_remote_directory_contents
+
+        contents = list_remote_directory_contents("remote:/path")
+
+        assert [c["name"] for c in contents] == [".hidden"]
+        assert contents[0]["size"] == "-"
+
+
+class TestIsRemoteDirParentLookup:
+    def test_parent_listing_failure_returns_false(self, monkeypatch):
+        def fake_check_output(cmd, **kw):
+            if cmd[2] == "remote:/b":
+                return json.dumps(
+                    [{"Path": "b", "Name": "b", "IsDir": False}]
+                ).encode()
+            raise subprocess.CalledProcessError(1, "rclone")
+
+        monkeypatch.setattr(
+            "rclone_manager.webui.subprocess.check_output", fake_check_output
+        )
+        from rclone_manager.webui import _is_remote_dir
+
+        assert _is_remote_dir("remote:/b") is False
+
+    def test_parent_listing_bad_json_returns_false(self, monkeypatch):
+        def fake_check_output(cmd, **kw):
+            if cmd[2] == "remote:/b":
+                return json.dumps(
+                    [{"Path": "b", "Name": "b", "IsDir": False}]
+                ).encode()
+            return b"not json"
+
+        monkeypatch.setattr(
+            "rclone_manager.webui.subprocess.check_output", fake_check_output
+        )
+        from rclone_manager.webui import _is_remote_dir
+
+        assert _is_remote_dir("remote:/b") is False
+
+    def test_missing_parent_entry_returns_false(self, monkeypatch):
+        def fake_check_output(cmd, **kw):
+            if cmd[2] == "remote:/b":
+                return json.dumps(
+                    [{"Path": "b", "Name": "b", "IsDir": False}]
+                ).encode()
+            return json.dumps([{"Name": "other", "IsDir": True}]).encode()
+
+        monkeypatch.setattr(
+            "rclone_manager.webui.subprocess.check_output", fake_check_output
+        )
+        from rclone_manager.webui import _is_remote_dir
+
+        assert _is_remote_dir("remote:/b") is False
+
+
+class TestDownloadFilesAsZip:
+    def test_empty_selection_returns_none(self, monkeypatch):
+        messages = []
+        monkeypatch.setattr(
+            "rclone_manager.webui.st.warning", lambda *a, **kw: messages.append(a)
+        )
+        from rclone_manager.webui import download_files_as_zip
+
+        assert download_files_as_zip([]) is None
+        assert messages
+
+    def test_zips_files_and_directories(self, monkeypatch):
+        from rclone_manager.webui import download_files_as_zip
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            file_path = os.path.join(tmpdir, "note.txt")
+            with open(file_path, "w") as handle:
+                handle.write("hello")
+            dir_path = os.path.join(tmpdir, "folder")
+            os.makedirs(dir_path)
+            with open(os.path.join(dir_path, "inner.txt"), "w") as handle:
+                handle.write("inner")
+
+            zip_buffer = download_files_as_zip([file_path, dir_path])
+
+        assert zip_buffer is not None
+        with ZipFile(zip_buffer) as archive:
+            assert sorted(archive.namelist()) == ["folder/inner.txt", "note.txt"]
+
+    def test_missing_path_reports_error(self, monkeypatch):
+        errors = []
+        monkeypatch.setattr(
+            "rclone_manager.webui.st.error", lambda *a, **kw: errors.append(a)
+        )
+        monkeypatch.setattr("rclone_manager.webui.st.warning", lambda *a, **kw: None)
+        from rclone_manager.webui import download_files_as_zip
+
+        assert download_files_as_zip(["/definitely/not/here"]) is None
+        assert errors
+
+
+class TestDownloadRemoteUnexpectedError:
+    def test_unexpected_error_reports_and_returns_none(self, monkeypatch):
+        errors = []
+        monkeypatch.setattr(
+            "rclone_manager.webui.st.error", lambda *a, **kw: errors.append(a)
+        )
+        monkeypatch.setattr(
+            "rclone_manager.webui._is_remote_dir",
+            lambda path: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+        from rclone_manager.webui import download_remote_files_as_zip
+
+        assert download_remote_files_as_zip(["remote:file.txt"]) is None
+        assert errors
