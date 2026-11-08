@@ -322,7 +322,7 @@ uv run pytest tests/ -v
 | `ENABLE_CORS` | CORS toggle (default: true, restricted to origin) |
 | `INCLUDE_HIDDEN` | Show hidden files in transfers |
 | `USE_FZF` | Toggle fzf fuzzy search |
-| `RMAN_MOUNT_DIR` | Mount base directory |
+| `MOUNT_DIR` | Mount base directory (default: `~/Remotes`) |
 | `RCLONE_FLAGS_*` | Per-remote-type rclone flags (from `[rclone_flags]` section) |
 
 ---

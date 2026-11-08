@@ -299,7 +299,7 @@ uv run rclone-manager upload
 ### Mount Google Drive as local directory
 ```bash
 uv run rclone-manager mount
-# Select remote, choose mount point, access via ~/mnt/<name>
+# Select remote, choose mount point, access via ~/Remotes/<name>
 ```
 
 ### Set up automated sync pair

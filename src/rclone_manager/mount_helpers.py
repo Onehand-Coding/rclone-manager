@@ -16,7 +16,7 @@ def _is_windows() -> bool:
 
 def _get_mount_base() -> str:
     return os.path.expanduser(
-        os.environ.get("MOUNT_DIR", "~/mnt")
+        os.environ.get("MOUNT_DIR", "~/Remotes")
     )
 
 

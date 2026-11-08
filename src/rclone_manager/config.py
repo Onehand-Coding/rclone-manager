@@ -40,7 +40,7 @@ DEFAULTS = {
     "PASSWORD": "",
     "WEBUI_USERNAME": "admin",
     "WEBUI_PASSWORD": "",
-    "MOUNT_DIR": "~/mnt",
+    "MOUNT_DIR": "~/Remotes",
 }
 
 

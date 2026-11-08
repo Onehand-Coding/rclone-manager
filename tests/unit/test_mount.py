@@ -20,7 +20,7 @@ class TestHelpers:
         from rclone_manager.mount import _get_mount_base
 
         path = _get_mount_base()
-        assert path == os.path.expanduser("~/mnt")
+        assert path == os.path.expanduser("~/Remotes")
 
     def test_find_free_port_returns_start_when_scan_range_exhausted(self, monkeypatch):
         from rclone_manager.mount import _find_free_port
